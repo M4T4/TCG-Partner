@@ -1,0 +1,253 @@
+Setup
+Matt_277 chose tails for the opening coin flip.
+0Naldo0 won the coin toss.
+0Naldo0 decided to go second.
+Matt_277 drew 7 cards for the opening hand.
+- 7 drawn cards.
+   • Buddy-Buddy Poffin, Sacred Ash, Poké Pad, Dusknoir, Gwynn, Strange Timepiece, Kadabra
+0Naldo0 drew 7 cards for the opening hand.
+- 7 drawn cards.
+Matt_277 took a mulligan.
+- Cards revealed from Mulligan 1
+   • Buddy-Buddy Poffin, Sacred Ash, Poké Pad, Dusknoir, Gwynn, Strange Timepiece, Kadabra
+Matt_277 took 2 mulligans.
+- Cards revealed from Mulligan 2
+   • Gwynn, Dusclops, Kadabra, Gwynn, Sacred Ash, Hilda, Dusknoir
+0Naldo0 drew 2 more cards because Matt_277 took at least 1 mulligan.
+- 0Naldo0 drew 2 cards.
+Matt_277 played Duskull to the Active Spot.
+0Naldo0 played Budew to the Active Spot.
+
+Matt_277's Turn
+Matt_277 drew Dusclops.
+Matt_277 attached Telepathic Psychic Energy to Duskull in the Active Spot.
+Telepathic Psychic Energy was activated.
+- Matt_277 drew 2 cards and played them to the Bench.
+   • Abra, Abra
+- Matt_277 shuffled their deck.
+Matt_277 ended their turn.
+
+0Naldo0's Turn
+0Naldo0 drew a card.
+0Naldo0 played Gwynn.
+- 0Naldo0 discarded 2 cards.
+   • Banette, Sinistcha
+- 0Naldo0 drew 6 cards.
+0Naldo0 played Igglybuff to the Bench.
+0Naldo0 played Poltchageist to the Bench.
+0Naldo0 retreated Budew to the Bench.
+0Naldo0's Igglybuff is now in the Active Spot.
+0Naldo0 played Buddy-Buddy Poffin.
+- 0Naldo0 drew 2 cards and played them to the Bench.
+   • Poltchageist, Igglybuff
+- 0Naldo0 shuffled their deck.
+0Naldo0's Igglybuff used Bouncy Circle on Matt_277’s Duskull for 120 damage.
+- Damage breakdown:
+   • 4 Benched Pokémon: 120 damage
+
+Matt_277's Duskull was Knocked Out!
+Telepathic Psychic Energy was discarded from Matt_277's Duskull.
+0Naldo0 took a Prize card.
+A card was added to 0Naldo0's hand.
+Matt_277's Abra is now in the Active Spot.
+
+Matt_277's Turn
+Matt_277 drew Dusclops.
+Matt_277 played Rare Candy.
+- Matt_277 evolved Abra to Alakazam in the Active Spot.
+Matt_277's Alakazam used Psychic Draw.
+- Matt_277 drew 3 cards.
+   • Boss's Orders, Dusknoir, Telepathic Psychic Energy
+Matt_277 attached Telepathic Psychic Energy to Alakazam in the Active Spot.
+Telepathic Psychic Energy was activated.
+- Matt_277 drew 2 cards and played them to the Bench.
+   • Duskull, Duskull
+- Matt_277 shuffled their deck.
+Matt_277 played Gwynn.
+- Matt_277 discarded 2 cards.
+   • Dusclops, Dusknoir
+- Matt_277 drew 6 cards.
+   • Kadabra, Sacred Ash, Fezandipiti ex, Rare Candy, Kadabra, Buddy-Buddy Poffin
+Matt_277 evolved Abra to Kadabra on the Bench.
+Matt_277's Kadabra used Psychic Draw.
+- Matt_277 drew 2 cards.
+   • Gwynn, Special Red Card
+Matt_277 played Buddy-Buddy Poffin.
+- Matt_277 drew Duskull and played it to the Bench.
+- Matt_277 shuffled their deck.
+Matt_277's Alakazam used Powerful Hand.
+- Matt_277 put 20 damage counters on Matt_277's Igglybuff.
+0Naldo0's Igglybuff was Knocked Out!
+Matt_277 took a Prize card.
+Rare Candy was added to Matt_277's hand.
+0Naldo0's Igglybuff is now in the Active Spot.
+
+0Naldo0's Turn
+0Naldo0 drew a card.
+0Naldo0 played Gwynn.
+- 0Naldo0 discarded 2 cards.
+   • Sinistcha, Budew
+- 0Naldo0 drew 6 cards.
+0Naldo0 played Igglybuff to the Bench.
+0Naldo0 played Ultra Ball.
+- 0Naldo0 discarded 2 cards.
+   • Ultra Ball, Sinistcha
+- 0Naldo0 drew Poltchageist.
+- 0Naldo0 shuffled their deck.
+0Naldo0 played Poltchageist to the Bench.
+0Naldo0's Igglybuff used Bouncy Circle on Matt_277’s Alakazam for 150 damage.
+- Damage breakdown:
+   • 5 Benched Pokémon: 150 damage
+
+Matt_277's Alakazam was Knocked Out!
+- 2 cards were discarded from Matt_277's Alakazam.
+   • Telepathic Psychic Energy, Abra
+0Naldo0 took a Prize card.
+A card was added to 0Naldo0's hand.
+Matt_277's Kadabra is now in the Active Spot.
+
+Matt_277's Turn
+Matt_277 drew Special Red Card.
+Matt_277 evolved Duskull to Dusclops on the Bench.
+Matt_277 played Gwynn.
+- Matt_277 discarded Kadabra.
+- Matt_277 drew 3 cards.
+   • Hilda, Night Stretcher, Hilda
+Matt_277 played Fezandipiti ex to the Bench.
+Matt_277's Fezandipiti ex used Flip the Script.
+- Matt_277 drew 3 cards.
+   • Hilda, Buddy-Buddy Poffin, Poké Pad
+Matt_277 played Poké Pad.
+- Matt_277 drew Alakazam.
+- Matt_277 shuffled their deck.
+Matt_277 evolved Kadabra to Alakazam in the Active Spot.
+Matt_277's Alakazam used Psychic Draw.
+- Matt_277 drew 3 cards.
+   • Hilda, Buddy-Buddy Poffin, Patrat
+Matt_277's Dusclops used Cursed Blast.
+- Matt_277 put 5 damage counters on Matt_277's Igglybuff.
+0Naldo0's Poltchageist used Hide 'n' Sneak.
+- Effects of Cursed Blast did not affect Poltchageist.
+0Naldo0's Poltchageist used Hide 'n' Sneak.
+- Effects of Cursed Blast did not affect Poltchageist.
+0Naldo0's Poltchageist used Hide 'n' Sneak.
+- Effects of Cursed Blast did not affect Poltchageist.
+0Naldo0's Igglybuff was Knocked Out!
+Matt_277's Dusclops was Knocked Out!
+Duskull was discarded from Matt_277's Dusclops.
+0Naldo0 took a Prize card.
+A card was added to 0Naldo0's hand.
+Matt_277 took a Prize card.
+Abra was added to Matt_277's hand.
+Matt_277 played Night Stretcher.
+- Matt_277 moved Matt_277's Dusclops to their hand.
+Matt_277 evolved Duskull to Dusclops on the Bench.
+Matt_277's Dusclops used Cursed Blast.
+- Matt_277 put 5 damage counters on Matt_277's Igglybuff.
+0Naldo0's Poltchageist used Hide 'n' Sneak.
+- Effects of Cursed Blast did not affect Poltchageist.
+0Naldo0's Poltchageist used Hide 'n' Sneak.
+- Effects of Cursed Blast did not affect Poltchageist.
+0Naldo0's Poltchageist used Hide 'n' Sneak.
+- Effects of Cursed Blast did not affect Poltchageist.
+0Naldo0's Igglybuff was Knocked Out!
+Matt_277's Dusclops was Knocked Out!
+Duskull was discarded from Matt_277's Dusclops.
+0Naldo0 took a Prize card.
+A card was added to 0Naldo0's hand.
+Matt_277 took a Prize card.
+Abra was added to Matt_277's hand.
+0Naldo0's Poltchageist is now in the Active Spot.
+Matt_277 played Special Red Card.
+- 0Naldo0 shuffled their hand.
+- 0Naldo0 put 13 cards on the bottom of their deck.
+- 0Naldo0 drew 3 cards.
+Matt_277 ended their turn.
+
+0Naldo0's Turn
+0Naldo0 drew a card.
+0Naldo0 ended their turn.
+
+Matt_277's Turn
+Matt_277 drew Telepathic Psychic Energy.
+Matt_277 attached Telepathic Psychic Energy to Alakazam in the Active Spot.
+Telepathic Psychic Energy was activated.
+- Matt_277 shuffled their deck.
+Matt_277 played Sacred Ash.
+- Matt_277 shuffled 5 cards into their deck.
+   • Abra, Duskull, Duskull, Dusclops, Dusclops
+Matt_277 played Hilda.
+- Matt_277 drew 2 cards.
+   • Dusclops, Telepathic Psychic Energy
+- Matt_277 shuffled their deck.
+Matt_277 evolved Duskull to Dusclops on the Bench.
+Matt_277's Dusclops used Cursed Blast.
+- Matt_277 put 5 damage counters on Matt_277's Budew.
+0Naldo0's Poltchageist used Hide 'n' Sneak.
+- Effects of Cursed Blast did not affect Poltchageist.
+0Naldo0's Poltchageist used Hide 'n' Sneak.
+- Effects of Cursed Blast did not affect Poltchageist.
+0Naldo0's Poltchageist used Hide 'n' Sneak.
+- Effects of Cursed Blast did not affect Poltchageist.
+0Naldo0's Budew was Knocked Out!
+Matt_277's Dusclops was Knocked Out!
+Duskull was discarded from Matt_277's Dusclops.
+0Naldo0 took a Prize card.
+A card was added to 0Naldo0's hand.
+Matt_277 took a Prize card.
+Dusknoir was added to Matt_277's hand.
+Matt_277 played Special Red Card.
+- 0Naldo0 shuffled their hand.
+- 0Naldo0 put 5 cards on the bottom of their deck.
+- 0Naldo0 drew 3 cards.
+Matt_277's Alakazam used Powerful Hand.
+0Naldo0's Poltchageist used Hide 'n' Sneak.
+- Effects of Powerful Hand did not affect Poltchageist.
+
+0Naldo0's Turn
+0Naldo0 drew a card.
+0Naldo0 played Prism Tower to the Stadium spot.
+0Naldo0 played Pokégear 3.0.
+- 0Naldo0 shuffled their deck.
+0Naldo0 played Lillie's Determination.
+- 0Naldo0 shuffled a card into their deck.
+- 0Naldo0 drew 6 cards.
+0Naldo0 played Brilliant Blender.
+- 0Naldo0 discarded 5 cards.
+   • Banette, Banette, Brave Bangle, Brave Bangle, Brave Bangle
+- 0Naldo0 shuffled their deck.
+0Naldo0 played Prism Tower.
+- 0Naldo0 discarded 2 cards.
+   • Brave Bangle, Banette
+- 0Naldo0 drew a card.
+0Naldo0 ended their turn.
+
+Matt_277's Turn
+Matt_277 drew Kadabra.
+Matt_277 played Strange Timepiece.
+- Matt_277 devolved Matt_277's Alakazam to Kadabra in the Active Spot.
+- Matt_277 moved Matt_277's Alakazam to their hand.
+Matt_277's Kadabra used Super Psy Bolt on 0Naldo0’s Poltchageist for 30 damage.
+0Naldo0's Poltchageist was Knocked Out!
+Matt_277 took a Prize card.
+Shaymin was added to Matt_277's hand.
+0Naldo0's Poltchageist is now in the Active Spot.
+
+0Naldo0's Turn
+0Naldo0 drew a card.
+0Naldo0 played Buddy-Buddy Poffin.
+- 0Naldo0 drew 2 cards and played them to the Bench.
+   • Igglybuff, Budew
+- 0Naldo0 shuffled their deck.
+0Naldo0 retreated Poltchageist to the Bench.
+0Naldo0's Igglybuff is now in the Active Spot.
+0Naldo0's Igglybuff used Bouncy Circle on Matt_277’s Kadabra for 90 damage.
+- Damage breakdown:
+   • 3 Benched Pokémon: 90 damage
+
+Matt_277's Kadabra was Knocked Out!
+- 2 cards were discarded from Matt_277's Kadabra.
+   • Telepathic Psychic Energy, Abra
+0Naldo0 took a Prize card.
+A card was added to 0Naldo0's hand.
+Opponent took all of their Prize cards. 0Naldo0 wins.
