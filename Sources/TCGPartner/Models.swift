@@ -56,13 +56,14 @@ enum ArchetypeColor: String, Codable, CaseIterable, Identifiable {
 }
 
 /// Un arquetipo («Alakazam», «Charizard ex»). Agrupa carpetas de mazos y mazos sueltos.
-struct Archetype: Identifiable, Codable, Hashable {
+struct Archetype: Syncable, Codable {
     var id = UUID()
     var name: String
     var color: ArchetypeColor = .blue
     /// 1 o 2 Pokémon para los iconos («Alakazam», «Dusknoir»). `nil` = se deducen del nombre.
     var icons: [String]?
     var notes = ""
+    var updatedAt: Date?
 
     /// Iconos a mostrar: los elegidos o, si no hay, los del nombre («Alakazam / Dusknoir» → los dos).
     var iconNames: [String] {
@@ -92,7 +93,7 @@ enum EventKind: String, Codable, CaseIterable, Identifiable {
 }
 
 /// Un torneo o evento al que piensas ir.
-struct TournamentEvent: Identifiable, Codable, Hashable {
+struct TournamentEvent: Syncable, Codable {
     var id = UUID()
     var name = ""
     var kind: EventKind = .cup
@@ -110,6 +111,7 @@ struct TournamentEvent: Identifiable, Codable, Hashable {
     var placement: Int?
     var players: Int?
     var notes = ""
+    var updatedAt: Date?
 
     var finish: Placement? { Placement(place: placement, players: players) }
 
@@ -138,14 +140,20 @@ struct TournamentEvent: Identifiable, Codable, Hashable {
 }
 
 /// Lista de elementos guardada como un JSON en Application Support (partidas, eventos, arquetipos).
+/// Cada cambio actualiza `updatedAt` y cada borrado se anota en `DeletionLogStore`, para sincronizar.
 @MainActor
-final class CollectionStore<Item: Identifiable & Codable & Hashable>: ObservableObject where Item.ID == UUID {
+final class CollectionStore<Item: Syncable & Codable>: ObservableObject {
     @Published private(set) var items: [Item] = []
     @Published var errorMessage: String?
     let file: URL
+    /// Tabla de la nube con los mismos elementos («matches», «events»…).
+    let table: String
+    private let deletions: DeletionLogStore
 
-    init(fileName: String, folder: URL = DeckStore.supportFolder) {
+    init(fileName: String, table: String, folder: URL = DeckStore.supportFolder, deletions: DeletionLogStore? = nil) {
         file = folder.appendingPathComponent(fileName)
+        self.table = table
+        self.deletions = deletions ?? .shared
         guard FileManager.default.fileExists(atPath: file.path) else { return }
         do {
             let decoder = JSONDecoder()
@@ -156,6 +164,14 @@ final class CollectionStore<Item: Identifiable & Codable & Hashable>: Observable
         }
     }
 
+    /// Aplica cambios llegados de la nube, sin cambiar sus fechas ni anotarlos como borrados aquí.
+    func applyRemote(_ rows: [RemoteRow<Item>], pending: Set<UUID>) {
+        var updated = items
+        guard SyncMerge.apply(rows, to: &updated, pending: pending).changed else { return }
+        items = updated
+        write()
+    }
+
     func item(_ id: UUID?) -> Item? {
         guard let id else { return nil }
         return items.first { $0.id == id }
@@ -163,13 +179,7 @@ final class CollectionStore<Item: Identifiable & Codable & Hashable>: Observable
 
     /// Añade el elemento o reemplaza el que tenga el mismo id.
     func save(_ item: Item) {
-        if let index = items.firstIndex(where: { $0.id == item.id }) {
-            guard items[index] != item else { return }
-            items[index] = item
-        } else {
-            items.append(item)
-        }
-        write()
+        if items.upsertStamped(item) { write() }
     }
 
     func update(_ id: UUID, _ change: (inout Item) -> Void) {
@@ -179,15 +189,22 @@ final class CollectionStore<Item: Identifiable & Codable & Hashable>: Observable
     }
 
     func delete(_ id: UUID) {
+        guard items.contains(where: { $0.id == id }) else { return }
         items.removeAll { $0.id == id }
+        deletions.record(table: table, id: id)
         write()
     }
 
     /// Cambia varios elementos y escribe una sola vez.
     func updateAll(where matches: (Item) -> Bool, _ change: (inout Item) -> Void) {
         var changed = false
+        let now = Date()
         for index in items.indices where matches(items[index]) {
-            change(&items[index])
+            var item = items[index]
+            change(&item)
+            guard item.withoutTimestamp != items[index].withoutTimestamp else { continue }
+            item.updatedAt = now
+            items[index] = item
             changed = true
         }
         if changed { write() }

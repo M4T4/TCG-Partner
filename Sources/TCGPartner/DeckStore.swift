@@ -3,7 +3,7 @@ import DeckKit
 import Foundation
 
 /// Un mazo guardado. El texto de la lista es la fuente de verdad: se vuelve a leer con `DeckParser`.
-struct Deck: Identifiable, Codable, Hashable {
+struct Deck: Syncable, Codable {
     var id: UUID
     var name: String
     var list: String
@@ -16,7 +16,10 @@ struct Deck: Identifiable, Codable, Hashable {
     /// Iconos propios del mazo (1 o 2 Pokémon). `nil` = los de su carpeta o arquetipo.
     var icons: [String]?
     var created: Date
+    /// Última edición de la lista, el nombre o las notas (la que se muestra en la app).
     var modified: Date
+    /// Último cambio de cualquier tipo, incluso mover o cambiar iconos, para sincronizar.
+    var updatedAt: Date?
 
     var parsed: ParsedDeck { DeckParser.parse(list) }
     var currentStatus: DeckStatus { status ?? .testing }
@@ -31,12 +34,25 @@ enum DeckLocation: Hashable {
     case archetype(UUID)
 }
 
+/// Una carpeta tal como se guarda en la nube (en la app se identifican por nombre).
+struct FolderRow: Syncable, Codable {
+    var id: UUID
+    var name: String
+    var archetypeID: UUID?
+    var icons: [String]?
+    var updatedAt: Date?
+}
+
 /// Formato de folders.json: las carpetas y, opcionalmente, el arquetipo de cada una.
 private struct FoldersFile: Codable {
     var folders: [String]
     var archetypes: [String: UUID]
     /// Iconos propios de cada carpeta (opcional: los archivos anteriores no lo tienen).
     var icons: [String: [String]]?
+    /// Id estable de cada carpeta en la nube, que se conserva al renombrarla (opcional, como `icons`).
+    var ids: [String: UUID]?
+    /// Último cambio de cada carpeta, para sincronizar.
+    var updated: [String: Date]?
 }
 
 /// Guarda cada mazo como un JSON en `~/Library/Application Support/TCGPartner/Decks`.
@@ -49,6 +65,9 @@ final class DeckStore: ObservableObject {
     @Published private(set) var folderArchetypes: [String: UUID] = [:]
     /// Iconos propios de cada carpeta (las que no aparecen usan los de su arquetipo).
     @Published private(set) var folderIcons: [String: [String]] = [:]
+    /// Id de cada carpeta en la nube y su último cambio (no se muestran, solo se sincronizan).
+    private(set) var folderIDs: [String: UUID] = [:]
+    private(set) var folderUpdated: [String: Date] = [:]
     @Published var selectedID: Deck.ID?
     @Published var errorMessage: String?
 
@@ -119,12 +138,21 @@ final class DeckStore: ObservableObject {
             sort()
             // folders.json era una lista de nombres; ahora también guarda el arquetipo de cada carpeta.
             let data = try? Data(contentsOf: foldersFile)
-            let file = data.flatMap { try? JSONDecoder().decode(FoldersFile.self, from: $0) }
+            let file = data.flatMap { try? decoder.decode(FoldersFile.self, from: $0) }
                 ?? FoldersFile(folders: data.flatMap { try? JSONDecoder().decode([String].self, from: $0) } ?? [], archetypes: [:], icons: nil)
             // También las carpetas que usan los mazos, por si folders.json se perdió.
             folders = Self.sortedNames(Set(file.folders + decks.compactMap(\.folder)))
             folderArchetypes = file.archetypes.filter { folders.contains($0.key) }
             folderIcons = (file.icons ?? [:]).filter { folders.contains($0.key) }
+            folderIDs = (file.ids ?? [:]).filter { folders.contains($0.key) }
+            folderUpdated = (file.updated ?? [:]).filter { folders.contains($0.key) }
+            // Las carpetas de antes de la sincronización reciben un id una sola vez y se guarda,
+            // para que no cambie en cada arranque (si cambiara, se duplicarían en la nube).
+            let missing = folders.filter { folderIDs[$0] == nil }
+            if !missing.isEmpty {
+                for name in missing { folderIDs[name] = UUID() }
+                saveFolders()
+            }
             if selectedID == nil || deck(selectedID!) == nil { selectedID = decks.first?.id }
         } catch {
             errorMessage = "No se pudo abrir la carpeta de mazos: \(error.localizedDescription)"
@@ -134,8 +162,9 @@ final class DeckStore: ObservableObject {
     @discardableResult
     func create(name: String, list: String, at location: DeckLocation = .loose) -> Deck {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let now = Date()
         var deck = Deck(id: UUID(), name: trimmed.isEmpty ? DeckParser.parse(list).suggestedName : trimmed,
-                        list: list, notes: "", status: .testing, created: Date(), modified: Date())
+                        list: list, notes: "", status: .testing, created: now, modified: now, updatedAt: now)
         switch location {
         case .loose: break
         case .folder(let name): deck.folder = folders.contains(name) ? name : nil
@@ -177,6 +206,7 @@ final class DeckStore: ObservableObject {
             return
         }
         decks.remove(at: index)
+        DeletionLogStore.shared.record(table: "decks", id: id)
         if selectedID == id {
             selectedID = decks.isEmpty ? nil : decks[min(index, decks.count - 1)].id
         }
@@ -207,6 +237,7 @@ final class DeckStore: ObservableObject {
     func setArchetype(_ archetype: UUID?, forFolder name: String) {
         guard folders.contains(name), folderArchetypes[name] != archetype else { return }
         folderArchetypes[name] = archetype
+        touchFolder(name)
         saveFolders()
     }
 
@@ -216,6 +247,7 @@ final class DeckStore: ObservableObject {
     func setIcons(_ icons: [String], forFolder name: String) {
         guard folders.contains(name) else { return }
         folderIcons[name] = icons.isEmpty ? nil : icons
+        touchFolder(name)
         saveFolders()
     }
 
@@ -252,6 +284,7 @@ final class DeckStore: ObservableObject {
 
     /// Al borrar un arquetipo, sus carpetas y mazos quedan sin arquetipo (no se borra nada más).
     func detachArchetype(_ archetype: UUID) {
+        for (name, id) in folderArchetypes where id == archetype { touchFolder(name) }
         folderArchetypes = folderArchetypes.filter { $0.value != archetype }
         saveFolders()
         for index in decks.indices where decks[index].archetypeID == archetype {
@@ -266,6 +299,8 @@ final class DeckStore: ObservableObject {
         guard let name = validFolderName(raw) else { return nil }
         folders = Self.sortedNames(Set(folders + [name]))
         folderArchetypes[name] = archetype
+        folderIDs[name] = UUID()
+        touchFolder(name)
         saveFolders()
         return name
     }
@@ -276,6 +311,9 @@ final class DeckStore: ObservableObject {
         folders = Self.sortedNames(Set(folders.filter { $0 != oldName } + [name]))
         folderArchetypes[name] = folderArchetypes.removeValue(forKey: oldName)
         folderIcons[name] = folderIcons.removeValue(forKey: oldName)
+        folderIDs[name] = folderIDs.removeValue(forKey: oldName) ?? UUID()
+        folderUpdated[oldName] = nil
+        touchFolder(name)
         for index in decks.indices where decks[index].folder == oldName {
             decks[index].folder = name
             unsaved.insert(decks[index].id)
@@ -298,6 +336,8 @@ final class DeckStore: ObservableObject {
         folders.removeAll { $0 == name }
         folderArchetypes[name] = nil
         folderIcons[name] = nil
+        if let id = folderIDs.removeValue(forKey: name) { DeletionLogStore.shared.record(table: "folders", id: id) }
+        folderUpdated[name] = nil
         saveFolders()
     }
 
@@ -313,11 +353,17 @@ final class DeckStore: ObservableObject {
         return nil
     }
 
+    private func touchFolder(_ name: String) {
+        folderUpdated[name] = Date()
+    }
+
     private func saveFolders() {
         do {
             let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            try encoder.encode(FoldersFile(folders: folders, archetypes: folderArchetypes, icons: folderIcons))
+            try encoder.encode(FoldersFile(folders: folders, archetypes: folderArchetypes, icons: folderIcons,
+                                           ids: folderIDs, updated: folderUpdated))
                 .write(to: foldersFile, options: .atomic)
         } catch {
             errorMessage = "No se pudieron guardar las carpetas: \(error.localizedDescription)"
@@ -326,6 +372,78 @@ final class DeckStore: ObservableObject {
 
     private static func sortedNames(_ names: Set<String>) -> [String] {
         names.sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    // MARK: - Sincronización
+
+    /// Las carpetas como filas de la nube.
+    var folderRows: [FolderRow] {
+        folders.compactMap { name in
+            folderIDs[name].map {
+                FolderRow(id: $0, name: name, archetypeID: folderArchetypes[name], icons: folderIcons[name],
+                          updatedAt: folderUpdated[name])
+            }
+        }
+    }
+
+    /// Aplica mazos llegados de la nube, sin cambiar sus fechas ni anotarlos como borrados aquí.
+    func applyRemote(_ rows: [RemoteRow<Deck>], pending: Set<UUID>) {
+        flush()
+        var updated = decks
+        let result = SyncMerge.apply(rows, to: &updated, pending: pending)
+        guard result.changed else { return }
+        decks = updated
+        for id in result.upserted {
+            if let deck = deck(id) { write(deck) }
+        }
+        for id in result.removed {
+            try? FileManager.default.trashItem(at: file(for: id), resultingItemURL: nil)
+        }
+        // Un mazo en una carpeta que aquí no existe: se crea la carpeta.
+        let missing = Set(decks.compactMap(\.folder)).subtracting(folders)
+        if !missing.isEmpty {
+            folders = Self.sortedNames(Set(folders).union(missing))
+            for name in missing {
+                folderIDs[name] = UUID()
+                touchFolder(name)
+            }
+            saveFolders()
+        }
+        sort()
+        if let selectedID, deck(selectedID) == nil { self.selectedID = decks.first?.id }
+    }
+
+    /// Aplica carpetas llegadas de la nube: nuevas, renombradas, con otro arquetipo o borradas.
+    func applyRemoteFolders(_ rows: [RemoteRow<FolderRow>], pending: Set<UUID>) {
+        var current = folderRows
+        guard SyncMerge.apply(rows, to: &current, pending: pending).changed else { return }
+        let oldNames = Dictionary(folderIDs.map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
+        let oldArchetypes = folderArchetypes
+        // Si dos equipos crearon una carpeta con el mismo nombre, se queda la más reciente.
+        let byName = Dictionary(current.map { ($0.name, $0) }, uniquingKeysWith: { a, b in
+            (a.updatedAt ?? SyncDates.legacy) >= (b.updatedAt ?? SyncDates.legacy) ? a : b
+        })
+        folders = Self.sortedNames(Set(byName.keys))
+        folderIDs = byName.mapValues(\.id)
+        folderArchetypes = byName.compactMapValues(\.archetypeID)
+        folderIcons = byName.compactMapValues(\.icons)
+        folderUpdated = byName.compactMapValues(\.updatedAt)
+        saveFolders()
+
+        // Renombradas en otro equipo: sus mazos de este equipo cambian de carpeta también.
+        for row in byName.values {
+            guard let old = oldNames[row.id], old != row.name else { continue }
+            for index in decks.indices where decks[index].folder == old {
+                decks[index].folder = row.name
+                unsaved.insert(decks[index].id)
+            }
+        }
+        flush()
+        // Borradas en otro equipo: sus mazos se quedan en el arquetipo que tenía la carpeta, o sueltos.
+        for deck in decks {
+            guard let name = deck.folder, !folders.contains(name) else { continue }
+            move(deck.id, to: oldArchetypes[name].map(DeckLocation.archetype) ?? .loose)
+        }
     }
 
     /// Copia la lista del mazo seleccionado al portapapeles, en formato Limitless.
@@ -346,8 +464,11 @@ final class DeckStore: ObservableObject {
     /// Escribe a disco todos los mazos con cambios pendientes.
     func flush() {
         saveTask?.cancel()
+        let now = Date()
         for id in unsaved {
-            if let deck = deck(id) { write(deck) }
+            guard let index = decks.firstIndex(where: { $0.id == id }) else { continue }
+            decks[index].updatedAt = now
+            write(decks[index])
         }
         unsaved.removeAll()
     }

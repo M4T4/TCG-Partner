@@ -54,6 +54,8 @@ public struct MatchRecord: Identifiable, Codable, Hashable, Sendable {
     public var opponentPrizes: Int?
     /// Ronda o mesa en partidas presenciales («Ronda 3», «Mesa 12»).
     public var round: String?
+    /// Última modificación en este equipo, para sincronizar (`nil` en partidas anteriores a la sincronización).
+    public var updatedAt: Date?
 
     public var currentKind: MatchKind { kind ?? .inPerson }
 

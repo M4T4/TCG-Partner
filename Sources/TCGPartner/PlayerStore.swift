@@ -2,11 +2,12 @@ import DeckKit
 import Foundation
 
 /// Un jugador guardado, para no volver a escribir sus datos cada vez que imprime.
-struct Player: Identifiable, Codable, Hashable {
+struct Player: Syncable, Codable {
     var id: UUID
     var name: String
     var playerID: String
     var birthDate: Date?
+    var updatedAt: Date?
 
     var displayName: String {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
@@ -40,7 +41,7 @@ final class PlayerStore: ObservableObject {
 
     @discardableResult
     func add(name: String = "", playerID: String = "", birthDate: Date? = nil) -> Player {
-        let player = Player(id: UUID(), name: name, playerID: playerID, birthDate: birthDate)
+        let player = Player(id: UUID(), name: name, playerID: playerID, birthDate: birthDate, updatedAt: Date())
         players.append(player)
         save()
         return player
@@ -50,13 +51,24 @@ final class PlayerStore: ObservableObject {
         guard let index = players.firstIndex(where: { $0.id == id }) else { return }
         var player = players[index]
         change(&player)
-        guard player != players[index] else { return }
+        guard player.withoutTimestamp != players[index].withoutTimestamp else { return }
+        player.updatedAt = Date()
         players[index] = player
         save()
     }
 
     func delete(_ id: Player.ID) {
+        guard players.contains(where: { $0.id == id }) else { return }
         players.removeAll { $0.id == id }
+        DeletionLogStore.shared.record(table: "players", id: id)
+        save()
+    }
+
+    /// Aplica cambios llegados de la nube, sin cambiar sus fechas ni anotarlos como borrados aquí.
+    func applyRemote(_ rows: [RemoteRow<Player>], pending: Set<UUID>) {
+        var updated = players
+        guard SyncMerge.apply(rows, to: &updated, pending: pending).changed else { return }
+        players = updated
         save()
     }
 

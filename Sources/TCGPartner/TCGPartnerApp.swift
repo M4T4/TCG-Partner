@@ -13,10 +13,11 @@ struct TCGPartnerApp: App {
     }
 
     @StateObject private var players = PlayerStore()
-    @StateObject private var archetypes = ArchetypeStore(fileName: "archetypes.json")
-    @StateObject private var matches = MatchStore(fileName: "matches.json")
-    @StateObject private var events = EventStore(fileName: "events.json")
-    @StateObject private var journal = JournalStore(fileName: "journal.json")
+    @StateObject private var archetypes = ArchetypeStore(fileName: "archetypes.json", table: "archetypes")
+    @StateObject private var matches = MatchStore(fileName: "matches.json", table: "matches")
+    @StateObject private var events = EventStore(fileName: "events.json", table: "events")
+    @StateObject private var journal = JournalStore(fileName: "journal.json", table: "journal_entries")
+    @StateObject private var sync = SyncService()
     @AppStorage(AppTheme.key) private var theme = AppTheme.system
     @AppStorage(AppAppearance.key) private var appearance = AppAppearance.system
 
@@ -29,8 +30,13 @@ struct TCGPartnerApp: App {
                 .environmentObject(matches)
                 .environmentObject(events)
                 .environmentObject(journal)
+                .environmentObject(sync)
                 .tint(theme.accent)
-                .onAppear { NSApp.appearance = appearance.nsAppearance }
+                .onAppear {
+                    NSApp.appearance = appearance.nsAppearance
+                    sync.attach(.init(decks: store, players: players, archetypes: archetypes,
+                                      matches: matches, events: events, journal: journal))
+                }
                 .onChange(of: appearance) { NSApp.appearance = appearance.nsAppearance }
                 .frame(minWidth: 900, minHeight: 560)
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in

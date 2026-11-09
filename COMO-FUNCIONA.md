@@ -335,6 +335,20 @@ La **división** se calcula sola a partir del año de nacimiento (`AgeDivision.f
 | Journal | `~/Library/Application Support/TCGPartner/journal.json` |
 | Jugadores guardados | `~/Library/Application Support/TCGPartner/players.json` |
 | Opciones de impresión y último jugador elegido | Preferencias de la app (`defaults read dev.matt.TCGPartner`) |
+| Borrados pendientes de subir a la nube | `~/Library/Application Support/TCGPartner/deleted.json` |
+| Hasta dónde se sincronizó cada tabla | `~/Library/Application Support/TCGPartner/sync-state.json` |
+| Sesión de la nube | Llavero de macOS (servicio `supabase.gotrue.swift`) |
+
+### Preparación para la nube (Supabase)
+
+Cada elemento que se sincroniza (mazos, carpetas, arquetipos, partidas, eventos, journal y jugadores) lleva un `updatedAt` que cambia con **cualquier** cambio, incluso mover un mazo o cambiar sus iconos, que no tocan `modified`. Los JSON anteriores no lo tienen y se leen como `nil`. Las carpetas guardan además un id estable en `folders.json` (`ids`), que se conserva al renombrarlas.
+
+- `DeckKit/Sync.swift`: el protocolo `Syncable`, `upsertStamped` (guarda y marca la fecha solo si el contenido cambió) y `DeletionLog`.
+- `DeletionLogStore` anota en `deleted.json` cada elemento borrado, para que el borrado llegue a los otros equipos.
+- `SupabaseConfig.swift`: URL del proyecto y publishable key.
+- `DeckKit/SyncRows.swift`: convierte modelos ↔ filas con una lista explícita de columnas (`SyncColumn`, `"deckID"` ↔ `"deck_id"`), manda `null` en los campos vacíos para que borrarlos también los borre en la nube, y `SyncMerge` aplica las filas que llegan (gana el `updatedAt` más reciente).
+- `SyncService`: inicia sesión con email y contraseña (Configuración › Nube) y sincroniza al abrir la app, al volver a ella, cada 2 minutos y 4 s después de cada cambio. Por cada tabla (carpetas primero, luego mazos, arquetipos, partidas, eventos, journal y jugadores): **1)** baja lo que cambió en la nube desde la última vez (`server_updated_at`), **2)** sube los borrados de `deleted.json` y **3)** sube lo que cambió aquí desde la última subida. Los JSON locales siguen siendo la copia de trabajo, así que todo funciona sin conexión.
+- `supabase/migrations/`: el esquema. Hay una tabla por cada JSON, con borrado lógico (`deleted_at`) y un `server_updated_at` que pone el servidor para pedir "lo que cambió desde X". Si llega una versión más vieja que la guardada, se ignora. Cada usuario solo ve sus filas (RLS).
 
 `players.json` es una lista:
 

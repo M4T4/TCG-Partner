@@ -43,6 +43,9 @@ public struct JournalEntry: Identifiable, Codable, Hashable, Sendable {
     public var pinned: Bool
     public var created: Date
     public var modified: Date
+    /// Última modificación en este equipo, para sincronizar. A diferencia de `modified`, cambia con
+    /// cualquier cambio (fijar, mover de arquetipo…), no solo al editar el texto.
+    public var updatedAt: Date?
 
     public init(archetypeID: UUID, kind: JournalKind = .note, title: String = "", body: String = "",
                 opponent: String = "", matchID: UUID? = nil, pinned: Bool = false, date: Date = Date()) {
