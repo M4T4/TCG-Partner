@@ -39,7 +39,7 @@ struct Panel<Content: View, Accessory: View>: View {
             content
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color(nsColor: .controlBackgroundColor)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.controlBackground))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(.separator.opacity(0.6)))
     }
 }
@@ -77,7 +77,7 @@ struct StatCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color(nsColor: .controlBackgroundColor)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.controlBackground))
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(.separator.opacity(0.6)))
     }
 }

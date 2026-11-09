@@ -10,6 +10,8 @@ enum StatsScope: String, CaseIterable, Identifiable {
 struct AppActions {
     var select: (SidebarItem) -> Void
     var newDeck: () -> Void
+    /// Mazo nuevo en un lugar concreto (p. ej. dentro de un arquetipo), con el portapapeles ya pegado si es una lista.
+    var newDeckAt: (DeckLocation) -> Void
     var logMatch: (_ deckID: UUID?) -> Void
     /// Registrar una partida de un tipo concreto (PTCG Live o presencial).
     var logMatchOfKind: (_ deckID: UUID?, _ kind: MatchKind) -> Void
@@ -199,7 +201,7 @@ struct DashboardView: View {
                     Button(showAllArchetypes ? "Mostrar menos" : "Ver todos los arquetipos (\(rows.count))") {
                         showAllArchetypes.toggle()
                     }
-                    .buttonStyle(.link)
+                    .linkButtonStyle()
                     .font(.caption)
                     .frame(maxWidth: .infinity)
                     .padding(10)
@@ -276,7 +278,7 @@ struct DashboardView: View {
         if !events.items.isEmpty {
             Panel(title: "Resultados en eventos", subtitle: "Tu posición y récord en los eventos más recientes") {
                 Button("Ver todos") { actions.select(.events) }
-                    .buttonStyle(.link)
+                    .linkButtonStyle()
             } content: {
                 if finished.isEmpty {
                     emptyState("Todavía no terminas ningún evento en este periodo.", button: nil, action: nil)
@@ -291,7 +293,7 @@ struct DashboardView: View {
         let recent = scopedMatches.sorted { $0.date > $1.date }.prefix(6)
         return Panel(title: "Actividad reciente") {
             Button("Historial completo") { actions.select(.matches) }
-                .buttonStyle(.link)
+                .linkButtonStyle()
         } content: {
             if recent.isEmpty {
                 emptyState("Todavía no registras partidas en este periodo.", button: "Registrar partida") { actions.logMatch(nil) }
@@ -408,7 +410,7 @@ struct DashboardView: View {
     private var eventsPanel: some View {
         Panel(title: "Próximos eventos") {
             Button("Ver todos") { actions.select(.events) }
-                .buttonStyle(.link)
+                .linkButtonStyle()
         } content: {
             if upcomingEvents.isEmpty {
                 emptyState("Agrega los torneos a los que piensas ir.", button: "Nuevo evento") { actions.editEvent(nil) }

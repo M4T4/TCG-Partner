@@ -1,4 +1,3 @@
-import AppKit
 import DeckKit
 import Foundation
 
@@ -200,7 +199,7 @@ final class DeckStore: ObservableObject {
         guard let index = decks.firstIndex(where: { $0.id == id }) else { return }
         unsaved.remove(id)
         do {
-            try FileManager.default.trashItem(at: file(for: id), resultingItemURL: nil)
+            try PlatformFiles.discard(file(for: id))
         } catch {
             errorMessage = "No se pudo eliminar el mazo: \(error.localizedDescription)"
             return
@@ -397,7 +396,7 @@ final class DeckStore: ObservableObject {
             if let deck = deck(id) { write(deck) }
         }
         for id in result.removed {
-            try? FileManager.default.trashItem(at: file(for: id), resultingItemURL: nil)
+            try? PlatformFiles.discard(file(for: id))
         }
         // Un mazo en una carpeta que aquí no existe: se crea la carpeta.
         let missing = Set(decks.compactMap(\.folder)).subtracting(folders)
@@ -449,17 +448,18 @@ final class DeckStore: ObservableObject {
     /// Copia la lista del mazo seleccionado al portapapeles, en formato Limitless.
     func copySelectedList() {
         guard let deck = selectedDeck else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(deck.parsed.export(), forType: .string)
+        Clipboard.copy(deck.parsed.export())
     }
 
+    #if os(macOS)
     func revealInFinder(_ id: Deck.ID? = nil) {
         if let id {
-            NSWorkspace.shared.activateFileViewerSelecting([file(for: id)])
+            PlatformFiles.reveal(file(for: id), selecting: true)
         } else {
-            NSWorkspace.shared.open(folder)
+            PlatformFiles.reveal(folder)
         }
     }
+    #endif
 
     /// Escribe a disco todos los mazos con cambios pendientes.
     func flush() {

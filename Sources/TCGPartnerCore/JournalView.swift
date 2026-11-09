@@ -259,7 +259,7 @@ private struct JournalEditor: View {
             flush()
             discardIfEmpty()
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in flush() }
+        .onReceive(NotificationCenter.default.publisher(for: .flushRequested)) { _ in flush() }
     }
 
     private var binding: Binding<JournalEntry> {
@@ -332,7 +332,7 @@ private struct JournalEditor: View {
         HStack(spacing: 18) {
             if let id = entry.matchID, matches.item(id) != nil {
                 Button("Ver partida") { actions.showMatch(id) }
-                    .buttonStyle(.link)
+                    .linkButtonStyle()
             }
             Spacer()
             Text("Editado \(entry.modified.formatted(.relative(presentation: .named)))")
@@ -381,7 +381,7 @@ struct PinnedJournalPanel: View {
         if !pinned.isEmpty {
             Panel(title: "Para recordar", subtitle: "Lo que fijaste en tu journal") {
                 Button("Abrir journal") { actions.select(.journal(archetype.id, entry: nil)) }
-                    .buttonStyle(.link)
+                    .linkButtonStyle()
             } content: {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 12)], alignment: .leading, spacing: 12) {
                     ForEach(pinned.prefix(6)) { entry in

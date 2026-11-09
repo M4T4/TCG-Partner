@@ -1,4 +1,3 @@
-import AppKit
 import DeckKit
 import SwiftUI
 
@@ -61,7 +60,7 @@ actor PokemonIconService {
 struct PokemonIconView: View {
     let name: String
     var size: CGFloat = 24
-    @State private var image: NSImage?
+    @State private var image: PlatformImage?
     @State private var failed = false
 
     var body: some View {
@@ -165,7 +164,7 @@ struct IconPicker: View {
                         names = []
                         load()
                     }
-                        .buttonStyle(.link)
+                        .linkButtonStyle()
                         .font(.caption)
                 }
             }

@@ -1,4 +1,3 @@
-import AppKit
 import DeckKit
 import SwiftUI
 
@@ -189,11 +188,11 @@ actor CardImageService {
 /// Imágenes ya leídas de disco, para no decodificarlas otra vez al hacer scroll.
 @MainActor
 enum CardImageMemory {
-    private static let cache = NSCache<NSURL, NSImage>()
+    private static let cache = NSCache<NSURL, PlatformImage>()
 
-    static func image(at url: URL) -> NSImage? {
+    static func image(at url: URL) -> PlatformImage? {
         if let image = cache.object(forKey: url as NSURL) { return image }
-        guard let image = NSImage(contentsOf: url) else { return nil }
+        guard let image = PlatformImage(contentsOf: url) else { return nil }
         cache.setObject(image, forKey: url as NSURL)
         return image
     }
@@ -203,7 +202,7 @@ enum CardImageMemory {
 struct CardImage: View {
     let entry: CardEntry
     var size: CardImageSize = .small
-    @State private var image: NSImage?
+    @State private var image: PlatformImage?
     @State private var failed = false
 
     static let aspectRatio: CGFloat = 63.0 / 88.0

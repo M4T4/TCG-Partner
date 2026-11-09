@@ -24,8 +24,12 @@ TCG-Partner/
 │   │   ├── Matches.swift      MatchRecord (PTCG Live o presencial), MatchStats, filtro por temporada y Ranking.best
 │   │   ├── BattleLog.swift    Lee el battle log de PTCG Live: jugadores, ganador, turnos, premios, Pokémon
 │   │   └── PokemonIcon.swift  Nombre de carta → icono de Limitless («Alolan Ninetales» → ninetales-alola)
-│   └── TCGPartner/            La app (SwiftUI + AppKit)
-│       ├── TCGPartnerApp.swift   @main, ventana y menús (Archivo › Nuevo mazo…)
+│   ├── TCGPartner/            App de Mac: solo @main, la ventana y el ciclo de vida
+│   │   └── TCGPartnerApp.swift
+│   └── TCGPartnerCore/        Todo lo compartido por Mac e iPhone (librería TCGPartnerCore)
+│       ├── AppModel.swift        AppModel (todos los stores + sincronización), RootView y los menús de Mac
+│       ├── Platform.swift        Lo que cambia entre Mac e iPhone: imágenes, portapapeles, papelera, colores, estilos
+│       ├── SyncService.swift     Login y sincronización con Supabase
 │       ├── Models.swift          Archetype, TournamentEvent, DeckStatus + CollectionStore (JSON genérico)
 │       ├── Analytics.swift       Cruza mazos, arquetipos y partidas: récord por mazo y por arquetipo
 │       ├── Components.swift      Piezas visuales: Panel, StatCard, WinRateBar, badges, PieChart (Swift Charts)
@@ -379,10 +383,17 @@ Cada mazo es un JSON legible:
 ```sh
 swift run                 # abre la app en modo desarrollo
 ./scripts/test.sh         # tests de DeckKit
-./scripts/build-app.sh    # build/TCGPartner.app (release, icono, Info.plist, firma ad-hoc)
+./scripts/build-app.sh    # build/TCGPartner.app (release, icono, Info.plist, firma)
+./scripts/make-signing-cert.sh  # una sola vez: certificado local para firmar
 ```
 
+`build-app.sh` firma con el certificado local «TCG Partner Local Signing» si existe. Así el llavero reconoce la app entre compilaciones y no vuelve a pedir permiso para leer la sesión de la nube. Sin él, firma ad-hoc y el permiso se pide tras cada compilación. Con `swift run` siempre se pide, porque ese binario no se firma.
+
 Para cambiar el icono, pon una imagen cuadrada en `Resources/AppIconSource.png` y vuelve a ejecutar `build-app.sh`.
+
+## Mac e iPhone
+
+`TCGPartnerCore` no importa AppKit ni UIKit directamente salvo en `Platform.swift` y en bloques `#if os(macOS)`. Si necesitas algo de una sola plataforma (portapapeles, Finder, imprimir…), añádelo a `Platform.swift` con su versión para cada una, o envuélvelo en `#if os(macOS)`. En iPhone, imprimir es "Compartir o imprimir PDF" (`DecklistPDFExport`).
 
 ## Cómo añadir una función nueva
 

@@ -134,7 +134,7 @@ struct DeckView: View {
                     Label("\(parsed.unparsedLines.count) líneas de la lista no se reconocieron. Revisar…",
                           systemImage: "exclamationmark.bubble")
                 }
-                .buttonStyle(.link)
+                .linkButtonStyle()
             }
         }
     }

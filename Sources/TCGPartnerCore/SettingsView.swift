@@ -80,9 +80,11 @@ struct SettingsView: View {
                 LabeledContent("Mazos guardados", value: "\(decks.decks.count)")
                 LabeledContent("Jugadores guardados", value: "\(playerStore.players.count)")
                 HStack {
+                    #if os(macOS)
                     Button("Mostrar datos en Finder") {
-                        NSWorkspace.shared.open(DeckStore.supportFolder)
+                        PlatformFiles.reveal(DeckStore.supportFolder)
                     }
+                    #endif
                     Button(cacheCleared ? "Caché vaciada" : "Vaciar caché de imágenes") {
                         Task {
                             await CardImageService.shared.clearCache()

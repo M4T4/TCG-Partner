@@ -49,5 +49,13 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-codesign --force --deep --sign - "$APP"
+# Firma con el certificado local si existe (ver make-signing-cert.sh): así el llavero reconoce
+# la app entre compilaciones. Si no, firma ad-hoc y el llavero pedirá permiso tras cada compilación.
+SIGN_ID="TCG Partner Local Signing"
+if security find-identity -v -p codesigning | grep -q "\"$SIGN_ID\""; then
+  codesign --force --deep --sign "$SIGN_ID" "$APP"
+else
+  echo "⚠️  Sin certificado local: firma ad-hoc. Ejecuta ./scripts/make-signing-cert.sh una vez."
+  codesign --force --deep --sign - "$APP"
+fi
 echo "✅ $APP listo. Ábrelo con: open $APP"

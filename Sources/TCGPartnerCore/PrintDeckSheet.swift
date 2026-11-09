@@ -1,6 +1,8 @@
-import AppKit
 import DeckKit
+#if os(macOS)
+import AppKit
 import PDFKit
+#endif
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -82,7 +84,7 @@ struct PrintDeckSheet: View {
                             .tag(option)
                         }
                     }
-                    .pickerStyle(.radioGroup)
+                    .radioGroupPickerStyle()
                     .labelsHidden()
                 }
 
@@ -108,9 +110,19 @@ struct PrintDeckSheet: View {
                 Button("Cerrar") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Spacer()
+                #if os(macOS)
                 Button("Exportar PDF…", action: exportPDF)
                 Button("Imprimir…", action: printPDF)
                     .keyboardShortcut(.defaultAction)
+                #else
+                // En iPhone, el menú de compartir ya ofrece imprimir, guardar en Archivos o enviar.
+                if let deck {
+                    ShareLink(item: DecklistPDFExport(name: "\(deck.name) - decklist.pdf", render: pdfData),
+                              preview: SharePreview("\(deck.name) - decklist.pdf")) {
+                        Label("Compartir o imprimir PDF", systemImage: "square.and.arrow.up")
+                    }
+                }
+                #endif
             }
             .padding(14)
             .disabled(deck == nil)
@@ -129,7 +141,7 @@ struct PrintDeckSheet: View {
             let page = paper.size
             let scale = min((proxy.size.width - 48) / page.width, (proxy.size.height - 48) / page.height)
             ZStack {
-                Color(nsColor: .underPageBackgroundColor)
+                Color.underPageBackground
                 if let deck {
                     DecklistPage(deck: deck, player: player, options: options)
                         .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
@@ -147,6 +159,7 @@ struct PrintDeckSheet: View {
         return DecklistPDF.render(DecklistPage(deck: deck, player: player, options: options), size: paper.size)
     }
 
+    #if os(macOS)
     private func exportPDF() {
         guard let deck, let data = pdfData() else { return }
         let panel = NSSavePanel()
@@ -156,7 +169,7 @@ struct PrintDeckSheet: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try data.write(to: url, options: .atomic)
-            NSWorkspace.shared.activateFileViewerSelecting([url])
+            PlatformFiles.reveal(url, selecting: true)
         } catch {
             store.errorMessage = "No se pudo guardar el PDF: \(error.localizedDescription)"
         }
@@ -177,6 +190,20 @@ struct PrintDeckSheet: View {
         }
         operation.jobTitle = deck?.name ?? "Decklist"
         operation.run()
+    }
+    #endif
+}
+
+/// El PDF de la hoja para el menú de compartir. Se dibuja solo cuando se comparte.
+struct DecklistPDFExport: Transferable {
+    let name: String
+    let render: @MainActor () -> Data?
+
+    static var transferRepresentation: some TransferRepresentation {
+        DataRepresentation(exportedContentType: .pdf) { export in
+            await MainActor.run { export.render() ?? Data() }
+        }
+        .suggestedFileName { $0.name }
     }
 }
 

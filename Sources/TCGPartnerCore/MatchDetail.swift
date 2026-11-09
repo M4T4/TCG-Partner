@@ -1,4 +1,3 @@
-import AppKit
 import DeckKit
 import SwiftUI
 
@@ -192,7 +191,7 @@ struct MatchDetailView: View {
                                     }
                                 }
                                 Button("Abrir mazo") { open(.deck(deck.id)) }
-                                    .buttonStyle(.link)
+                                    .linkButtonStyle()
                             } else {
                                 Text("Sin mazo").foregroundStyle(.secondary)
                             }
@@ -253,7 +252,7 @@ struct MatchDetailView: View {
             .padding(14)
         }
         .frame(width: 600, height: 720)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(Color.windowBackground)
         .confirmationDialog("¿Eliminar esta partida?", isPresented: $confirmDelete) {
             Button("Eliminar partida", role: .destructive) {
                 matches.delete(match.id)
@@ -338,11 +337,10 @@ struct MatchDetailView: View {
             }
             .frame(height: 220)
             Button(copied ? "Copiado" : "Copiar battle log") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(battleLog, forType: .string)
+                Clipboard.copy(battleLog)
                 copied = true
             }
-            .buttonStyle(.link)
+            .linkButtonStyle()
         }
     }
 
@@ -366,7 +364,7 @@ struct MatchDetailView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.controlBackground))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(.separator.opacity(0.6)))
     }
 

@@ -42,6 +42,10 @@ struct ArchetypeView: View {
                     }
                     .help("Tus anotaciones, guías y lo que aprendes en cada partida")
                     Button("Editar…") { actions.editArchetype(archetype) }
+                    Button { actions.newDeckAt(.archetype(archetype.id)) } label: {
+                        Label("Nuevo mazo", systemImage: "rectangle.stack.badge.plus")
+                    }
+                    .help("Crea un mazo en este arquetipo, directo o dentro de una de sus carpetas")
                     Menu {
                         Button { actions.logMatchOfKind(mostPlayedDeck, .online) } label: {
                             Label("Partida en PTCG Live…", systemImage: MatchKind.online.symbol)
@@ -81,10 +85,14 @@ struct ArchetypeView: View {
 
                     Panel(title: "Mazos", subtitle: "Ordenados por partidas jugadas") {
                         if archetypeDecks.isEmpty {
-                            Text("Arrastra mazos o carpetas sobre «\(archetype.name)» en la barra lateral.")
-                                .foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.bottom, 20)
+                            VStack(spacing: 10) {
+                                Text("Crea un mazo aquí o arrastra mazos y carpetas sobre «\(archetype.name)» en la barra lateral.")
+                                    .foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.center)
+                                Button("Crear mazo…") { actions.newDeckAt(.archetype(archetype.id)) }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.bottom, 20)
                         } else {
                             VStack(spacing: 0) {
                                 ForEach(analytics.deckPerformance.filter { archetypeDecks.map(\.id).contains($0.deck.id) }) { row in
@@ -123,7 +131,7 @@ struct ArchetypeView: View {
                 if !recent.isEmpty {
                     Panel(title: "Partidas recientes", subtitle: "Haz clic en una partida para ver todos sus datos") {
                         Button("Historial completo") { actions.select(.matches) }
-                            .buttonStyle(.link)
+                            .linkButtonStyle()
                     } content: {
                         MatchList(matches: Array(recent), onSelect: { actions.showMatch($0.id) })
                     }

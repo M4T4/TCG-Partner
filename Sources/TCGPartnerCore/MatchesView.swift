@@ -125,7 +125,7 @@ struct MatchesView: View {
             } primaryAction: { ids in
                 if let id = ids.first { actions.showMatch(id) }
             }
-            .onDeleteCommand {
+            .onDeleteKey {
                 selection.forEach(matches.delete)
                 selection = []
             }
@@ -277,7 +277,7 @@ struct MatchEditor: View {
                 }
             HStack {
                 Button("Pegar del portapapeles") {
-                    log = NSPasteboard.general.string(forType: .string) ?? log
+                    log = Clipboard.string ?? log
                 }
                 Spacer()
                 if !log.isEmpty {
@@ -388,7 +388,7 @@ struct MatchEditor: View {
         if let saved = match.battleLog {
             log = saved
         } else if isNew, match.currentKind == .online,
-                  let clipboard = NSPasteboard.general.string(forType: .string), BattleLogParser.parse(clipboard) != nil {
+                  let clipboard = Clipboard.string, BattleLogParser.parse(clipboard) != nil {
             // Si acabas de copiar el log en PTCG Live, ya viene pegado.
             log = clipboard
         }

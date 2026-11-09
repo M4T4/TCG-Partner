@@ -1,5 +1,7 @@
-import AppKit
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 /// Temas de color de la app, inspirados en los tipos de Pokémon.
 enum AppTheme: String, CaseIterable, Identifiable {
@@ -86,11 +88,22 @@ enum AppAppearance: String, CaseIterable, Identifiable {
         }
     }
 
+    #if os(macOS)
     var nsAppearance: NSAppearance? {
         switch self {
         case .system: nil
         case .light: NSAppearance(named: .aqua)
         case .dark: NSAppearance(named: .darkAqua)
+        }
+    }
+    #endif
+
+    /// Para `.preferredColorScheme` (iPhone). `nil` = la del sistema.
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
         }
     }
 }
@@ -101,7 +114,7 @@ struct AppBackground: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Color(nsColor: .windowBackgroundColor)
+            Color.windowBackground
             if let accent = theme.accent, let secondary = theme.secondary {
                 LinearGradient(colors: [accent.opacity(0.16), secondary.opacity(0.06), .clear],
                                startPoint: .topLeading, endPoint: .init(x: 0.7, y: 0.45))

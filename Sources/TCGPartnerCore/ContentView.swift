@@ -86,6 +86,7 @@ struct ContentView: View {
         AppActions(
             select: { selection = $0 },
             newDeck: { sheet = .deckList(.fromClipboard(at: store.currentLocation)) },
+            newDeckAt: { sheet = .deckList(.fromClipboard(at: $0)) },
             logMatch: { deckID in
                 sheet = .match(MatchRecord(deckID: deckID ?? selectedDeckID, eventID: currentEventID), isNew: true)
             },
@@ -290,7 +291,7 @@ struct ContentView: View {
                  onEditIcons: { sheet = .icons(.deck(deck.id)) })
             .id(deck.id)
             .navigationTitle(deck.name)
-            .navigationSubtitle(deck.parsed.summary)
+            .windowSubtitle(deck.parsed.summary)
     }
 
     private var dashboard: some View {
@@ -310,7 +311,7 @@ struct ContentView: View {
             archetypesSection
             decksSection
         }
-        .onDeleteCommand {
+        .onDeleteKey {
             if let id = selectedDeckID { store.delete(id) }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -446,7 +447,9 @@ struct ContentView: View {
             }
         }
         Button("Duplicar") { store.duplicate(deck.id) }
+        #if os(macOS)
         Button("Mostrar en Finder") { store.revealInFinder(deck.id) }
+        #endif
         Divider()
         Button("Mover a la papelera", role: .destructive) { store.delete(deck.id) }
     }

@@ -1,5 +1,7 @@
-import AppKit
 import Combine
+#if os(macOS)
+import AppKit
+#endif
 import DeckKit
 import Foundation
 import Supabase
@@ -82,8 +84,17 @@ final class SyncService: ObservableObject {
     let client = SupabaseClient(
         supabaseURL: SupabaseConfig.url,
         supabaseKey: SupabaseConfig.publishableKey,
-        options: SupabaseClientOptions(auth: .init(emitLocalSessionAsInitialSession: true))
+        options: SupabaseClientOptions(auth: SyncService.authOptions)
     )
+
+    /// En Mac la sesión va en un archivo (ver `AuthFileStorage`); en iPhone, en el llavero.
+    private static var authOptions: SupabaseClientOptions.AuthOptions {
+        #if os(macOS)
+        .init(storage: AuthFileStorage(), emitLocalSessionAsInitialSession: true)
+        #else
+        .init(emitLocalSessionAsInitialSession: true)
+        #endif
+    }
 
     private var stores: Stores?
     private var cancellables = Set<AnyCancellable>()
@@ -127,9 +138,11 @@ final class SyncService: ObservableObject {
         Timer.publish(every: Self.interval, on: .main, in: .common).autoconnect()
             .sink { [weak self] _ in self?.requestSync() }
             .store(in: &cancellables)
+        #if os(macOS)
         NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
             .sink { [weak self] _ in self?.requestSync() }
             .store(in: &cancellables)
+        #endif
         requestSync()
     }
 
