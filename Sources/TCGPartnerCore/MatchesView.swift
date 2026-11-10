@@ -15,6 +15,7 @@ struct MatchesView: View {
     @State private var kindFilter: MatchKind?
     @State private var selection = Set<MatchRecord.ID>()
     @State private var sortOrder = [KeyPathComparator(\HistoryRow.date, order: .reverse)]
+    @CompactWidth private var compact
 
     /// Fila ya resuelta para la tabla (nombres en lugar de ids, para poder ordenar).
     struct HistoryRow: Identifiable {
@@ -49,13 +50,112 @@ struct MatchesView: View {
         .sorted(using: sortOrder)
     }
 
-    var body: some View {
+    private var summaryText: String {
         let stats = filtered.stats
+        return stats.total == 0 ? "Sin partidas" : "\(stats.total) partidas · récord \(stats.record) · \(percentText(stats.winRate))"
+    }
+
+    private var hasFilters: Bool {
+        deckFilter != nil || resultFilter != nil || kindFilter != nil
+    }
+
+    var body: some View {
+        Group {
+            if compact { compactBody } else { fullBody }
+        }
+        .overlay {
+            if matches.items.isEmpty {
+                ContentUnavailableView {
+                    Label("Sin partidas", systemImage: "list.bullet.rectangle")
+                } description: {
+                    Text("Registra tus partidas para ver win rates y gráficas en el dashboard.")
+                } actions: {
+                    Button("Registrar partida") { actions.logMatch(nil) }
+                }
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { actions.logMatch(deckFilter) } label: {
+                    Label("Registrar partida", systemImage: "plus")
+                }
+                .help("Registrar partida (⌘R)")
+            }
+        }
+    }
+
+    // MARK: - iPhone
+
+    /// Lista de partidas, de la más reciente a la más vieja; los filtros van en un menú.
+    private var compactBody: some View {
+        List {
+            if !matches.items.isEmpty {
+                Section {
+                    Picker("Resultado", selection: $resultFilter) {
+                        Text("Todos").tag(MatchResult?.none)
+                        ForEach(MatchResult.allCases) { Text($0.title).tag(MatchResult?.some($0)) }
+                    }
+                    .pickerStyle(.segmented)
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                } footer: {
+                    Text(summaryText)
+                }
+            }
+            Section {
+                ForEach(rows) { row in
+                    MatchListRow(match: row.match, deckName: row.deck == "—" ? nil : row.deck, deckIcons: row.deckIcons,
+                                 eventName: row.event.isEmpty ? nil : row.event,
+                                 showRound: false, showEvent: false, tintByResult: false, compact: true)
+                        .listRowInsets(EdgeInsets())
+                        .onTapGesture { actions.showMatch(row.id) }
+                        .swipeActions(edge: .trailing) {
+                            Button("Eliminar", systemImage: "trash", role: .destructive) { matches.delete(row.id) }
+                        }
+                        .swipeActions(edge: .leading) {
+                            Button("Editar", systemImage: "pencil") { onEdit(row.match) }
+                                .tint(.accentColor)
+                        }
+                }
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .secondaryAction) { filterMenu }
+        }
+    }
+
+    private var filterMenu: some View {
+        Menu {
+            Picker("Mazo", selection: $deckFilter) {
+                Text("Todos los mazos").tag(UUID?.none)
+                ForEach(decks.decks.sorted { $0.name < $1.name }) { Text($0.name).tag(UUID?.some($0.id)) }
+            }
+            .pickerStyle(.menu)
+            Picker("Tipo", selection: $kindFilter) {
+                Text("Todas").tag(MatchKind?.none)
+                ForEach(MatchKind.allCases) { Label($0.title, systemImage: $0.symbol).tag(MatchKind?.some($0)) }
+            }
+            .pickerStyle(.menu)
+            if hasFilters {
+                Button("Quitar filtros", systemImage: "xmark.circle", role: .destructive) {
+                    deckFilter = nil
+                    kindFilter = nil
+                    resultFilter = nil
+                }
+            }
+        } label: {
+            Label("Filtros", systemImage: hasFilters ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+        }
+    }
+
+    // MARK: - Mac
+
+    private var fullBody: some View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Partidas").font(.title.bold())
-                    Text(stats.total == 0 ? "Sin partidas" : "\(stats.total) partidas · récord \(stats.record) · \(percentText(stats.winRate))")
+                    Text(summaryText)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -129,25 +229,6 @@ struct MatchesView: View {
                 selection.forEach(matches.delete)
                 selection = []
             }
-            .overlay {
-                if matches.items.isEmpty {
-                    ContentUnavailableView {
-                        Label("Sin partidas", systemImage: "list.bullet.rectangle")
-                    } description: {
-                        Text("Registra tus partidas para ver win rates y gráficas en el dashboard.")
-                    } actions: {
-                        Button("Registrar partida") { actions.logMatch(nil) }
-                    }
-                }
-            }
-        }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button { actions.logMatch(deckFilter) } label: {
-                    Label("Registrar partida", systemImage: "plus")
-                }
-                .help("Registrar partida (⌘R)")
-            }
         }
     }
 }
@@ -189,7 +270,49 @@ struct MatchEditor: View {
     }
 
     var body: some View {
+        #if os(iOS)
+        NavigationStack {
+            form
+                .navigationTitle(isNew ? "Registrar partida" : "Editar partida")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancelar", role: .cancel) { dismiss() }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(isNew ? "Registrar" : "Guardar", action: save)
+                    }
+                }
+        }
+        .onAppear(perform: setUp)
+        .onChange(of: log) { detectMe() }
+        .onChange(of: me) { applyLog() }
+        #else
         VStack(spacing: 0) {
+            form
+            HStack {
+                if !isNew {
+                    Button("Eliminar", role: .destructive) {
+                        matches.delete(match.id)
+                        dismiss()
+                    }
+                }
+                Spacer()
+                Button("Cancelar", role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button(isNew ? "Registrar" : "Guardar", action: save)
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(16)
+        }
+        .sheetFrame(width: 520, height: match.currentKind == .online ? 760 : 620)
+        .onAppear(perform: setUp)
+        .onChange(of: log) { detectMe() }
+        .onChange(of: me) { applyLog() }
+        #endif
+    }
+
+    private var form: some View {
             Form {
                 Section {
                     Picker("Tipo de partida", selection: kind) {
@@ -211,7 +334,7 @@ struct MatchEditor: View {
                         Text("Sí").tag(Bool?.some(true))
                         Text("No").tag(Bool?.some(false))
                     }
-                    .pickerStyle(.segmented)
+                    .labeledSegmentedPickerStyle()
                 }
                 Section("Rival") {
                     TextField("Jugador", text: $match.opponent,
@@ -235,27 +358,18 @@ struct MatchEditor: View {
                     TextField("Notas", text: $match.notes, axis: .vertical)
                         .lineLimit(2...4)
                 }
-            }
-            .formStyle(.grouped)
-            HStack {
+                #if os(iOS)
                 if !isNew {
-                    Button("Eliminar", role: .destructive) {
-                        matches.delete(match.id)
-                        dismiss()
+                    Section {
+                        Button("Eliminar partida", role: .destructive) {
+                            matches.delete(match.id)
+                            dismiss()
+                        }
                     }
                 }
-                Spacer()
-                Button("Cancelar", role: .cancel) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Button(isNew ? "Registrar" : "Guardar", action: save)
-                    .keyboardShortcut(.defaultAction)
+                #endif
             }
-            .padding(16)
-        }
-        .frame(width: 520, height: match.currentKind == .online ? 760 : 620)
-        .onAppear(perform: setUp)
-        .onChange(of: log) { detectMe() }
-        .onChange(of: me) { applyLog() }
+            .formStyle(.grouped)
     }
 
     // MARK: - Battle log

@@ -326,3 +326,18 @@ extension MatchRecord {
         return rival.isEmpty ? result.title : "\(result.title) vs \(rival)"
     }
 }
+
+/// Dos o más tarjetas lado a lado; en iPhone, una debajo de otra.
+struct AdaptiveStack<Content: View>: View {
+    var spacing: CGFloat = 14
+    @ViewBuilder var content: Content
+    @CompactWidth private var compact
+
+    var body: some View {
+        if compact {
+            VStack(alignment: .leading, spacing: spacing) { content }
+        } else {
+            HStack(alignment: .top, spacing: spacing) { content }
+        }
+    }
+}

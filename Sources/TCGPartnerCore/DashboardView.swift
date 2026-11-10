@@ -32,6 +32,7 @@ struct DashboardView: View {
 
     @AppStorage("dashboard.scope") private var scope = StatsScope.season
     @State private var showAllArchetypes = false
+    @CompactWidth private var compact
 
     private var season: Int { AgeDivision.season(on: Date()) }
 
@@ -64,7 +65,7 @@ struct DashboardView: View {
                         sideColumn(analytics)
                     }
                 }
-                .padding(28)
+                .padding(compact ? 16 : 28)
                 .frame(maxWidth: 1280)
                 .frame(maxWidth: .infinity)
             }
@@ -74,28 +75,55 @@ struct DashboardView: View {
 
     // MARK: - Cabecera y tarjetas
 
+    private var subtitle: String {
+        "\(scope == .season ? "Temporada \(season)" : "Todo el historial") · \(scopedMatches.count == 1 ? "1 partida" : "\(scopedMatches.count) partidas")"
+    }
+
+    private var scopePicker: some View {
+        Picker("Periodo", selection: $scope) {
+            Text(verbatim: "Temporada \(season)").tag(StatsScope.season)
+            Text("Todo").tag(StatsScope.all)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+    }
+
+    @ViewBuilder
     private var header: some View {
-        HStack(alignment: .bottom) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Dashboard").font(.largeTitle.bold())
-                Text("\(scope == .season ? "Temporada \(season)" : "Todo el historial") · \(scopedMatches.count == 1 ? "1 partida" : "\(scopedMatches.count) partidas")")
-                    .foregroundStyle(.secondary)
+        if compact {
+            // En iPhone el título va en la barra de navegación; aquí solo el periodo y las acciones.
+            VStack(alignment: .leading, spacing: 12) {
+                Text(subtitle).foregroundStyle(.secondary)
+                scopePicker
+                HStack {
+                    Button { actions.logMatch(nil) } label: {
+                        Label("Registrar partida", systemImage: "plus.circle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    Button(action: actions.newDeck) {
+                        Label("Nuevo mazo", systemImage: "plus")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                }
             }
-            Spacer()
-            Picker("Periodo", selection: $scope) {
-                Text(verbatim: "Temporada \(season)").tag(StatsScope.season)
-                Text("Todo").tag(StatsScope.all)
+        } else {
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Dashboard").font(.largeTitle.bold())
+                    Text(subtitle).foregroundStyle(.secondary)
+                }
+                Spacer()
+                scopePicker.fixedSize()
+                Button { actions.logMatch(nil) } label: {
+                    Label("Registrar partida", systemImage: "plus.circle")
+                }
+                Button(action: actions.newDeck) {
+                    Label("Nuevo mazo", systemImage: "plus")
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            Button { actions.logMatch(nil) } label: {
-                Label("Registrar partida", systemImage: "plus.circle")
-            }
-            Button(action: actions.newDeck) {
-                Label("Nuevo mazo", systemImage: "plus")
-            }
-            .buttonStyle(.borderedProminent)
         }
     }
 
@@ -109,7 +137,7 @@ struct DashboardView: View {
         }()
         let active = decks.decks.filter { $0.currentStatus != .retired }
         let next = upcomingEvents.first
-        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: 4), spacing: 14) {
+        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: compact ? 2 : 4), spacing: compact ? 10 : 14) {
             StatCard(title: "Win rate", value: percentText(stats.winRate), valueColor: winRateColor(stats.winRate),
                      detail: delta ?? (stats.total > 0 ? "Récord \(stats.record)" : "Sin partidas registradas"),
                      symbol: "chart.line.uptrend.xyaxis")
@@ -153,11 +181,13 @@ struct DashboardView: View {
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 0) {
                     GridRow {
                         Text("Arquetipo")
-                        Text("Carpetas").gridColumnAlignment(.trailing)
-                        Text("Mazos").gridColumnAlignment(.trailing)
+                        if !compact {
+                            Text("Carpetas").gridColumnAlignment(.trailing)
+                            Text("Mazos").gridColumnAlignment(.trailing)
+                        }
                         Text("Partidas").gridColumnAlignment(.trailing)
                         Text("Win rate")
-                        Text("")
+                        if !compact { Text("") }
                     }
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -170,10 +200,13 @@ struct DashboardView: View {
                                 Text(row.name).fontWeight(.medium).lineLimit(1)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            Text("\(row.folderCount)").monospacedDigit().foregroundStyle(.secondary)
-                            Text("\(row.deckCount)").monospacedDigit().foregroundStyle(.secondary)
+                            if !compact {
+                                Text("\(row.folderCount)").monospacedDigit().foregroundStyle(.secondary)
+                                Text("\(row.deckCount)").monospacedDigit().foregroundStyle(.secondary)
+                            }
                             Text("\(row.stats.total)").monospacedDigit()
                             WinRateBar(rate: row.stats.winRate)
+                            if !compact {
                             Menu {
                                 if let archetype = row.archetype {
                                     Button("Abrir") { actions.select(.archetype(archetype.id)) }
@@ -186,6 +219,7 @@ struct DashboardView: View {
                             .menuStyle(.borderlessButton)
                             .menuIndicator(.hidden)
                             .fixedSize()
+                            }
                         }
                         .padding(.vertical, 9)
                         .contentShape(Rectangle())
@@ -221,11 +255,11 @@ struct DashboardView: View {
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 0) {
                     GridRow {
                         Text("Mazo")
-                        Text("Arquetipo")
+                        if !compact { Text("Arquetipo") }
                         Text("Partidas").gridColumnAlignment(.trailing)
-                        Text("V - D")
+                        if !compact { Text("V - D") }
                         Text("Win rate")
-                        Text("Estado").gridColumnAlignment(.trailing)
+                        if !compact { Text("Estado").gridColumnAlignment(.trailing) }
                     }
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -243,15 +277,17 @@ struct DashboardView: View {
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            if let archetype = row.archetype {
-                                Badge(text: archetype.name, color: archetype.color.color)
-                            } else {
-                                Text("—").foregroundStyle(.tertiary)
+                            if !compact {
+                                if let archetype = row.archetype {
+                                    Badge(text: archetype.name, color: archetype.color.color)
+                                } else {
+                                    Text("—").foregroundStyle(.tertiary)
+                                }
                             }
                             Text("\(row.stats.total)").monospacedDigit()
-                            Text(row.stats.total > 0 ? row.stats.record : "—").monospacedDigit()
+                            if !compact { Text(row.stats.total > 0 ? row.stats.record : "—").monospacedDigit() }
                             WinRateBar(rate: row.stats.winRate)
-                            StatusBadge(status: row.deck.currentStatus)
+                            if !compact { StatusBadge(status: row.deck.currentStatus) }
                         }
                         .padding(.vertical, 9)
                         .contentShape(Rectangle())
@@ -451,9 +487,25 @@ struct EventResultsTable: View {
     @EnvironmentObject private var matches: MatchStore
     let events: [TournamentEvent]
     let onSelect: (TournamentEvent) -> Void
+    @CompactWidth private var compact
 
     var body: some View {
         VStack(spacing: 0) {
+            if !compact { header }
+            ForEach(Array(events.enumerated()), id: \.element.id) { index, event in
+                if !compact || index > 0 { Divider() }
+                let eventMatches = matches.items.filter { $0.eventID == event.id }
+                let deck = event.playedDeckID(in: eventMatches).flatMap(decks.deck)
+                EventResultRow(event: event, stats: eventMatches.stats, deckName: deck?.name,
+                               deckIcons: deck.map { decks.icons(for: $0, archetypes: archetypes) } ?? [],
+                               compact: compact)
+                    .onTapGesture { onSelect(event) }
+            }
+        }
+        .padding(.bottom, 4)
+    }
+
+    private var header: some View {
             HStack(spacing: 12) {
                 Text("Posición").frame(width: 92, alignment: .leading)
                 Text("Evento").frame(maxWidth: .infinity, alignment: .leading)
@@ -467,16 +519,6 @@ struct EventResultsTable: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
-            ForEach(events) { event in
-                Divider()
-                let eventMatches = matches.items.filter { $0.eventID == event.id }
-                let deck = event.playedDeckID(in: eventMatches).flatMap(decks.deck)
-                EventResultRow(event: event, stats: eventMatches.stats, deckName: deck?.name,
-                               deckIcons: deck.map { decks.icons(for: $0, archetypes: archetypes) } ?? [])
-                    .onTapGesture { onSelect(event) }
-            }
-        }
-        .padding(.bottom, 4)
     }
 }
 
@@ -533,9 +575,38 @@ private struct EventResultRow: View {
     let stats: MatchStats
     let deckName: String?
     let deckIcons: [String]
+    var compact = false
     @State private var hovering = false
 
     var body: some View {
+        if compact { compactBody } else { fullBody }
+    }
+
+    /// iPhone: posición, evento con fecha y récord.
+    private var compactBody: some View {
+        HStack(spacing: 10) {
+            placement.frame(width: 84, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(event.name.isEmpty ? "Evento sin nombre" : event.name).fontWeight(.medium)
+                Text("\(event.kind.title) · \(event.startDate.formatted(.dateTime.day().month(.abbreviated)))")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if !deckIcons.isEmpty { PokemonIcons(names: deckIcons, size: 22) }
+            Text(stats.total > 0 ? "\(stats.wins)-\(stats.losses)-\(stats.ties)" : "—")
+                .monospacedDigit()
+                .font(.callout)
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 9)
+        .contentShape(Rectangle())
+    }
+
+    private var fullBody: some View {
         HStack(spacing: 12) {
             placement.frame(width: 92, alignment: .leading)
             VStack(alignment: .leading, spacing: 2) {

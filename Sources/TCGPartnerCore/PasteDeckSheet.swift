@@ -128,7 +128,7 @@ struct PasteDeckSheet: View {
             }
         }
         .padding(20)
-        .frame(minWidth: 520, idealWidth: 560, minHeight: 520, idealHeight: 620)
+        .sheetFrame(minWidth: 520, idealWidth: 560, minHeight: 520, idealHeight: 620)
         .onAppear(perform: load)
     }
 

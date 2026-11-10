@@ -230,6 +230,6 @@ struct IconsEditorSheet: View {
             }
             .padding(16)
         }
-        .frame(width: 520, height: 340)
+        .sheetFrame(width: 520, height: 340)
     }
 }

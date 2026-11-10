@@ -247,6 +247,6 @@ struct EventEditor: View {
             }
             .padding(16)
         }
-        .frame(width: 500, height: 720)
+        .sheetFrame(width: 500, height: 720)
     }
 }

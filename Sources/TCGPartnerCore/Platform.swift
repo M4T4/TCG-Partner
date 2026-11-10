@@ -138,6 +138,16 @@ extension View {
         #endif
     }
 
+    /// Segmentado con su etiqueta al lado en Mac; en iPhone el segmentado no muestra la etiqueta,
+    /// así que se usa un menú (etiqueta a la izquierda, valor a la derecha).
+    func labeledSegmentedPickerStyle() -> some View {
+        #if os(macOS)
+        pickerStyle(.segmented)
+        #else
+        pickerStyle(.menu)
+        #endif
+    }
+
     /// La tecla ⌫ en Mac (en iPhone se borra con gestos o menús).
     func onDeleteKey(perform action: @escaping () -> Void) -> some View {
         #if os(macOS)
@@ -151,6 +161,42 @@ extension View {
     func windowSubtitle(_ text: String) -> some View {
         #if os(macOS)
         navigationSubtitle(text)
+        #else
+        self
+        #endif
+    }
+}
+
+// MARK: - Ancho compacto (iPhone)
+
+/// `true` en pantallas estrechas (iPhone en vertical): las vistas quitan columnas y apilan paneles.
+/// En Mac siempre es `false`.
+@propertyWrapper
+struct CompactWidth: DynamicProperty {
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    var wrappedValue: Bool { sizeClass == .compact }
+    #else
+    var wrappedValue: Bool { false }
+    #endif
+
+    init() {}
+}
+
+extension View {
+    /// Tamaño de una hoja en Mac. En iPhone y iPad las hojas ocupan lo que el sistema les da.
+    func sheetFrame(width: CGFloat, height: CGFloat) -> some View {
+        #if os(macOS)
+        frame(width: width, height: height)
+        #else
+        self
+        #endif
+    }
+
+    /// Tamaño mínimo e ideal de una hoja redimensionable en Mac (sin efecto en iPhone).
+    func sheetFrame(minWidth: CGFloat, idealWidth: CGFloat, minHeight: CGFloat, idealHeight: CGFloat) -> some View {
+        #if os(macOS)
+        frame(minWidth: minWidth, idealWidth: idealWidth, minHeight: minHeight, idealHeight: idealHeight)
         #else
         self
         #endif

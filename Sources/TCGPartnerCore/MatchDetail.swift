@@ -14,9 +14,27 @@ struct MatchList: View {
     /// Pinta la fila de verde si ganaste y de rojo si perdiste.
     var tintByResult = false
     let onSelect: (MatchRecord) -> Void
+    @CompactWidth private var compact
 
     var body: some View {
         VStack(spacing: 0) {
+            if !compact { header }
+            ForEach(Array(matches.enumerated()), id: \.element.id) { index, match in
+                if !compact || index > 0 { Divider() }
+                let deck = match.deckID.flatMap(decks.deck)
+                MatchListRow(match: match,
+                             deckName: deck?.name,
+                             deckIcons: deck.map { decks.icons(for: $0, archetypes: archetypes) } ?? [],
+                             eventName: events.item(match.eventID)?.name,
+                             showRound: showRound, showEvent: showEvent, tintByResult: tintByResult,
+                             compact: compact)
+                    .onTapGesture { onSelect(match) }
+            }
+        }
+        .padding(.bottom, 6)
+    }
+
+    private var header: some View {
             HStack(spacing: 12) {
                 if showRound { Text("Ronda").frame(width: 70, alignment: .leading) }
                 Text("Resultado").frame(width: 92, alignment: .leading)
@@ -31,22 +49,11 @@ struct MatchList: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
-            ForEach(matches) { match in
-                Divider()
-                let deck = match.deckID.flatMap(decks.deck)
-                MatchListRow(match: match,
-                             deckName: deck?.name,
-                             deckIcons: deck.map { decks.icons(for: $0, archetypes: archetypes) } ?? [],
-                             eventName: events.item(match.eventID)?.name,
-                             showRound: showRound, showEvent: showEvent, tintByResult: tintByResult)
-                    .onTapGesture { onSelect(match) }
-            }
-        }
-        .padding(.bottom, 6)
     }
 }
 
-private struct MatchListRow: View {
+/// Fila de partida (columnas en Mac; compacta en iPhone).
+struct MatchListRow: View {
     let match: MatchRecord
     let deckName: String?
     let deckIcons: [String]
@@ -54,6 +61,7 @@ private struct MatchListRow: View {
     let showRound: Bool
     let showEvent: Bool
     let tintByResult: Bool
+    var compact = false
     @State private var hovering = false
 
     /// Verde si gané, rojo si perdí; los empates quedan sin color.
@@ -63,6 +71,51 @@ private struct MatchListRow: View {
     }
 
     var body: some View {
+        if compact { compactBody } else { fullBody }
+    }
+
+    /// iPhone: resultado, rival con su mazo, y debajo mi mazo y la fecha.
+    private var compactBody: some View {
+        HStack(spacing: 10) {
+            Image(systemName: match.result.symbol)
+                .foregroundStyle(match.result.color)
+                .font(.title3)
+                .frame(width: 26)
+            if !match.opponentArchetype.isEmpty {
+                PokemonIcons(names: PokemonIcon.split(match.opponentArchetype), size: 26)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(rivalText).fontWeight(.medium)
+                Text([showRound ? match.round.flatMap { $0.isEmpty ? nil : "Ronda \($0)" } : nil,
+                      deckName,
+                      match.date.formatted(.relative(presentation: .named))]
+                        .compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .lineLimit(1)
+        .font(.callout)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(rowTint)
+        .contentShape(Rectangle())
+    }
+
+    private var rivalText: String {
+        switch (match.opponent.isEmpty, match.opponentArchetype.isEmpty) {
+        case (false, false): "\(match.opponentArchetype) · \(match.opponent)"
+        case (true, false): match.opponentArchetype
+        case (false, true): match.opponent
+        case (true, true): "Rival sin anotar"
+        }
+    }
+
+    private var fullBody: some View {
         HStack(spacing: 12) {
             if showRound {
                 Text(match.round?.isEmpty == false ? match.round! : "—")
@@ -145,13 +198,14 @@ struct MatchDetailView: View {
 
     @State private var confirmDelete = false
     @State private var copied = false
+    @CompactWidth private var compact
 
     var body: some View {
         if let match = matches.item(matchID) {
             content(match)
         } else {
             ContentUnavailableView("La partida ya no existe", systemImage: "questionmark.circle")
-                .frame(width: 560, height: 300)
+                .sheetFrame(width: 560, height: 300)
         }
     }
 
@@ -161,8 +215,7 @@ struct MatchDetailView: View {
         let event = events.item(match.eventID)
         let log = match.battleLog.flatMap(BattleLogParser.parse)
         let me = log.flatMap { $0.players.first { $0.caseInsensitiveCompare(match.opponent) != .orderedSame } }
-        return VStack(spacing: 0) {
-            ScrollView {
+        let page = ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     header(match, log: log)
 
@@ -179,7 +232,7 @@ struct MatchDetailView: View {
                         if let round = match.round, !round.isEmpty { detailRow("Ronda o mesa", round) }
                     }
 
-                    HStack(alignment: .top, spacing: 14) {
+                    AdaptiveStack(spacing: 14) {
                         sideCard("Mi mazo") {
                             if let deck {
                                 HStack(spacing: 10) {
@@ -236,8 +289,34 @@ struct MatchDetailView: View {
                         battleLogCard(battleLog)
                     }
                 }
-                .padding(24)
+                .padding(compact ? 16 : 24)
             }
+        #if os(iOS)
+        // iPhone y iPad: acciones en la barra superior; Eliminar y el journal en el menú «…».
+        let container = NavigationStack {
+            page
+                .navigationTitle("Partida")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cerrar") { dismiss() }
+                    }
+                    ToolbarItem(placement: .primaryAction) {
+                        Button("Editar") { onEdit(match) }
+                    }
+                    ToolbarItem(placement: .secondaryAction) {
+                        Menu {
+                            if let archetype { journalButton(match, archetype: archetype) }
+                            Button("Eliminar partida", systemImage: "trash", role: .destructive) { confirmDelete = true }
+                        } label: {
+                            Label("Más", systemImage: "ellipsis.circle")
+                        }
+                    }
+                }
+        }
+        #else
+        let container = VStack(spacing: 0) {
+            page
             Divider()
             HStack {
                 Button("Eliminar", role: .destructive) { confirmDelete = true }
@@ -251,7 +330,9 @@ struct MatchDetailView: View {
             }
             .padding(14)
         }
-        .frame(width: 600, height: 720)
+        #endif
+        return container
+        .sheetFrame(width: 600, height: 720)
         .background(Color.windowBackground)
         .confirmationDialog("¿Eliminar esta partida?", isPresented: $confirmDelete) {
             Button("Eliminar partida", role: .destructive) {

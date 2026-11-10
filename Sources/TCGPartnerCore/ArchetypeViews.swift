@@ -305,7 +305,7 @@ struct ArchetypeEditor: View {
             }
             .padding(16)
         }
-        .frame(width: 520, height: 560)
+        .sheetFrame(width: 520, height: 560)
         .confirmationDialog("¿Eliminar el arquetipo «\(archetype.name)»?", isPresented: $confirmDelete) {
             Button("Eliminar arquetipo", role: .destructive) {
                 decks.detachArchetype(archetype.id)

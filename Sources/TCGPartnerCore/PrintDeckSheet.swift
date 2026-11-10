@@ -43,7 +43,7 @@ struct PrintDeckSheet: View {
             Divider()
             preview
         }
-        .frame(minWidth: 1000, idealWidth: 1080, minHeight: 700, idealHeight: 780)
+        .sheetFrame(minWidth: 1000, idealWidth: 1080, minHeight: 700, idealHeight: 780)
         .alert("Error", isPresented: Binding(get: { playerStore.errorMessage != nil },
                                              set: { if !$0 { playerStore.errorMessage = nil } })) {
             Button("Aceptar", role: .cancel) {}
