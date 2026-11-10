@@ -69,6 +69,10 @@ struct DashboardView: View {
                 .frame(maxWidth: 1280)
                 .frame(maxWidth: .infinity)
             }
+            #if DEBUG
+            // Para capturas: `-scrollAnchor 0.5` abre el dashboard a media altura.
+            .defaultScrollAnchor(UnitPoint(x: 0, y: UserDefaults.standard.double(forKey: "scrollAnchor")))
+            #endif
         }
         .background(AppBackground())
     }
@@ -97,12 +101,12 @@ struct DashboardView: View {
                 scopePicker
                 HStack {
                     Button { actions.logMatch(nil) } label: {
-                        Label("Registrar partida", systemImage: "plus.circle")
+                        OneLineLabel(title: "Registrar partida", short: "Partida", systemImage: "plus.circle")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
                     Button(action: actions.newDeck) {
-                        Label("Nuevo mazo", systemImage: "plus")
+                        OneLineLabel(title: "Nuevo mazo", short: "Mazo", systemImage: "plus")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
@@ -177,6 +181,29 @@ struct DashboardView: View {
             if rows.isEmpty {
                 emptyState("Crea un arquetipo (por ejemplo «Alakazam») y relaciónale carpetas de mazos.",
                            button: "Nuevo arquetipo") { actions.editArchetype(nil) }
+            } else if compact {
+                VStack(spacing: 0) {
+                    ForEach(Array(visible.enumerated()), id: \.element.id) { index, row in
+                        if index > 0 { Divider().padding(.leading, 16) }
+                        CompactStatRow(title: row.name, detail: gamesDetail(row.stats), rate: row.stats.winRate) {
+                            ArchetypeIcon(archetype: row.archetype, size: 26)
+                        }
+                        .onTapGesture {
+                            if let archetype = row.archetype { actions.select(.archetype(archetype.id)) }
+                        }
+                    }
+                }
+                .padding(.bottom, rows.count > 6 ? 0 : 6)
+                if rows.count > 6 {
+                    Divider()
+                    Button(showAllArchetypes ? "Mostrar menos" : "Ver todos los arquetipos (\(rows.count))") {
+                        showAllArchetypes.toggle()
+                    }
+                    .linkButtonStyle()
+                    .font(.caption)
+                    .frame(maxWidth: .infinity)
+                    .padding(10)
+                }
             } else {
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 0) {
                     GridRow {
@@ -251,6 +278,17 @@ struct DashboardView: View {
         } content: {
             if rows.isEmpty {
                 emptyState("Pega una lista de Limitless para crear tu primer mazo.", button: "Nuevo mazo", action: actions.newDeck)
+            } else if compact {
+                VStack(spacing: 0) {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                        if index > 0 { Divider().padding(.leading, 16) }
+                        CompactStatRow(title: row.deck.name, detail: gamesDetail(row.stats), rate: row.stats.winRate) {
+                            PokemonIcons(names: decks.icons(for: row.deck, archetypes: archetypes), size: 30)
+                        }
+                        .onTapGesture { actions.select(.deck(row.deck.id)) }
+                    }
+                }
+                .padding(.bottom, 6)
             } else {
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 0) {
                     GridRow {
@@ -328,7 +366,7 @@ struct DashboardView: View {
     private var recentPanel: some View {
         let recent = scopedMatches.sorted { $0.date > $1.date }.prefix(6)
         return Panel(title: "Actividad reciente") {
-            Button("Historial completo") { actions.select(.matches) }
+            Button(compact ? "Ver todas" : "Historial completo") { actions.select(.matches) }
                 .linkButtonStyle()
         } content: {
             if recent.isEmpty {
@@ -582,27 +620,42 @@ private struct EventResultRow: View {
         if compact { compactBody } else { fullBody }
     }
 
-    /// iPhone: posición, evento con fecha y récord.
+    /// iPhone: evento y récord arriba; posición, tipo y fecha debajo.
     private var compactBody: some View {
-        HStack(spacing: 10) {
-            placement.frame(width: 84, alignment: .leading)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(event.name.isEmpty ? "Evento sin nombre" : event.name).fontWeight(.medium)
-                Text("\(event.kind.title) · \(event.startDate.formatted(.dateTime.day().month(.abbreviated)))")
-                    .font(.caption).foregroundStyle(.secondary)
+        HStack(spacing: 12) {
+            if !deckIcons.isEmpty { PokemonIcons(names: deckIcons, size: 30) }
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(event.name.isEmpty ? "Evento sin nombre" : event.name)
+                        .fontWeight(.medium)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(stats.total > 0 ? "\(stats.wins)-\(stats.losses)-\(stats.ties)" : "—")
+                        .monospacedDigit()
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(stats.total > 0 ? winRateColor(stats.winRate) : .secondary)
+                        .fixedSize()
+                }
+                HStack(spacing: 4) {
+                    if let finish = event.finish {
+                        Image(systemName: finish.symbol).foregroundStyle(finish.color)
+                        Text(finish.players.map { "\(finish.ordinal) / \($0)" } ?? finish.ordinal)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(finish.color)
+                            .monospacedDigit()
+                        Text("·")
+                    }
+                    Text("\(event.kind.title) · \(event.startDate.formatted(.dateTime.day().month(.abbreviated)))")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
             .lineLimit(1)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            if !deckIcons.isEmpty { PokemonIcons(names: deckIcons, size: 22) }
-            Text(stats.total > 0 ? "\(stats.wins)-\(stats.losses)-\(stats.ties)" : "—")
-                .monospacedDigit()
-                .font(.callout)
             Image(systemName: "chevron.right")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 9)
+        .padding(.vertical, 10)
         .contentShape(Rectangle())
     }
 

@@ -1,9 +1,13 @@
 // Genera el iconset de la app. Uso: swift make-icon.swift <salida.icns> [imagen-fuente]
 // Con imagen fuente, la recorta en la forma redondeada de los iconos de macOS;
 // sin ella, dibuja el símbolo de la marca: cartas en abanico con una gráfica encima.
+//
+// Para iPhone:  swift make-icon.swift --ios <salida.png>
+// Un PNG de 1024 px a sangre completa (sin esquinas ni sombra: iOS recorta el icono él mismo).
 import AppKit
 
-let source: NSImage? = CommandLine.arguments.count > 2 ? NSImage(contentsOfFile: CommandLine.arguments[2]) : nil
+let ios = CommandLine.arguments.count > 2 && CommandLine.arguments[1] == "--ios"
+let source: NSImage? = !ios && CommandLine.arguments.count > 2 ? NSImage(contentsOfFile: CommandLine.arguments[2]) : nil
 
 // Paleta de la marca.
 func rgb(_ hex: UInt32, _ alpha: CGFloat = 1) -> CGColor {
@@ -110,6 +114,7 @@ func draw(size: Int) -> NSBitmapImageRep {
     NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
     defer { NSGraphicsContext.restoreGraphicsState() }
     let s = CGFloat(size) / 1024
+    if ios { return drawIOS(rep, size: size) }
     let tile = NSRect(x: 100 * s, y: 100 * s, width: 824 * s, height: 824 * s)
     let path = NSBezierPath(roundedRect: tile, xRadius: 185 * s, yRadius: 185 * s)
     if let source {
@@ -149,6 +154,30 @@ func draw(size: Int) -> NSBitmapImageRep {
     }
     drawChart(ctx, detail: d)
     return rep
+}
+
+/// iOS: el mismo azulejo y símbolo, pero ocupando todo el lienzo.
+func drawIOS(_ rep: NSBitmapImageRep, size: Int) -> NSBitmapImageRep {
+    let ctx = NSGraphicsContext.current!.cgContext
+    let canvas = CGRect(x: 0, y: 0, width: size, height: size)
+    let gradient = CGGradient(colorsSpace: nil, colors: [CGColor.white, rgb(0xEDE9FE)] as CFArray, locations: [0, 1])!
+    ctx.drawLinearGradient(gradient, start: CGPoint(x: 0, y: canvas.maxY), end: CGPoint(x: 0, y: canvas.minY), options: [])
+    let d = detail(for: size)
+    let k = canvas.height * 0.64 / symbolHeight
+    ctx.translateBy(x: canvas.midX, y: canvas.midY)
+    ctx.scaleBy(x: k, y: -k)
+    ctx.translateBy(x: -symbolCenter.x, y: -symbolCenter.y)
+    for (i, card) in cards.enumerated() {
+        drawCard(ctx, center: card.center, angle: card.angle, color: card.color, front: i == cards.count - 1, detail: d)
+    }
+    drawChart(ctx, detail: d)
+    return rep
+}
+
+if ios {
+    let data = draw(size: 1024).representation(using: .png, properties: [:])!
+    try! data.write(to: URL(fileURLWithPath: CommandLine.arguments[2]))
+    exit(0)
 }
 
 let out = CommandLine.arguments[1]

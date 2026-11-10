@@ -34,6 +34,8 @@ struct Panel<Content: View, Accessory: View>: View {
                 }
                 Spacer()
                 accessory
+                    .lineLimit(1)
+                    .fixedSize()
             }
             .padding(16)
             content
@@ -393,4 +395,66 @@ struct EditorSheet<Content: View>: View {
         }
         #endif
     }
+}
+
+/// Etiqueta de botón que siempre ocupa una línea: si el texto no cabe (iPhone, letra grande)
+/// usa la versión corta y, si aún no cabe, encoge un poco la letra.
+struct OneLineLabel: View {
+    let title: String
+    var short: String? = nil
+    let systemImage: String
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            Label(title, systemImage: systemImage).lineLimit(1)
+            Label(short ?? title, systemImage: systemImage)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+    }
+}
+
+/// Fila de iPhone para tablas de resultados: icono, nombre y detalle en dos líneas, y el win rate
+/// a la derecha. Nunca parte palabras aunque la letra del sistema sea grande.
+struct CompactStatRow<Icon: View>: View {
+    let title: String
+    let detail: String
+    let rate: Double?
+    @ViewBuilder var icon: Icon
+
+    var body: some View {
+        HStack(spacing: 12) {
+            icon
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).fontWeight(.medium)
+                Text(detail).font(.caption).foregroundStyle(.secondary)
+            }
+            .lineLimit(1)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .trailing, spacing: 4) {
+                Text(percentText(rate))
+                    .font(.callout.weight(.semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(winRateColor(rate))
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.quaternary)
+                    Capsule().fill(winRateColor(rate)).frame(width: 44 * (rate ?? 0))
+                }
+                .frame(width: 44, height: 4)
+            }
+            .fixedSize()
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+    }
+}
+
+/// «18 partidas · 10-8» o «Sin partidas».
+func gamesDetail(_ stats: MatchStats) -> String {
+    guard stats.total > 0 else { return "Sin partidas" }
+    return "\(stats.total) \(stats.total == 1 ? "partida" : "partidas") · \(stats.record)"
 }

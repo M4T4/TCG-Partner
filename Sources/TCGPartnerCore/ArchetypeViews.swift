@@ -66,6 +66,16 @@ struct ArchetypeView: View {
                         } else {
                             VStack(spacing: 0) {
                                 ForEach(analytics.deckPerformance.filter { archetypeDecks.map(\.id).contains($0.deck.id) }) { row in
+                                    if compact {
+                                        CompactStatRow(title: row.deck.name,
+                                                       detail: "\(gamesDetail(row.stats)) · \(row.deck.folder ?? "Sin carpeta")",
+                                                       rate: row.stats.winRate) {
+                                            PokemonIcons(names: decks.icons(for: row.deck, archetypes: archetypes), size: 30)
+                                        }
+                                        .padding(.horizontal, -16)
+                                        .onTapGesture { actions.select(.deck(row.deck.id)) }
+                                        Divider()
+                                    } else {
                                     HStack(spacing: 10) {
                                         PokemonIcons(names: decks.icons(for: row.deck, archetypes: archetypes), size: 30)
                                         VStack(alignment: .leading, spacing: 2) {
@@ -85,6 +95,7 @@ struct ArchetypeView: View {
                                     .contentShape(Rectangle())
                                     .onTapGesture { actions.select(.deck(row.deck.id)) }
                                     Divider()
+                                    }
                                 }
                             }
                             .padding(.horizontal, 16)
@@ -152,7 +163,7 @@ struct ArchetypeView: View {
 
     private var journalButton: some View {
         Button { actions.select(.journal(archetype.id, entry: nil)) } label: {
-            Label(noteCount > 0 ? "Journal · \(noteCount)" : "Journal", systemImage: "book.closed")
+            OneLineLabel(title: noteCount > 0 ? "Journal · \(noteCount)" : "Journal", systemImage: "book.closed")
         }
         .help("Tus anotaciones, guías y lo que aprendes en cada partida")
     }
@@ -166,7 +177,7 @@ struct ArchetypeView: View {
                 Label("Partida presencial…", systemImage: MatchKind.inPerson.symbol)
             }
         } label: {
-            Label("Registrar partida", systemImage: "plus.circle")
+            OneLineLabel(title: "Registrar partida", short: "Partida", systemImage: "plus.circle")
                 .frame(maxWidth: compact ? .infinity : nil)
         }
         .menuStyle(.button)
@@ -213,6 +224,42 @@ struct MatchupTable: View {
     @CompactWidth private var compact
 
     var body: some View {
+        if compact { compactBody } else { fullBody }
+    }
+
+    /// iPhone: cada rival en dos líneas, con el récord debajo y el win rate a la derecha.
+    private var compactBody: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(matchups.enumerated()), id: \.element.opponent) { index, row in
+                if index > 0 { Divider().padding(.leading, 16) }
+                let stats = row.stats
+                HStack(spacing: 12) {
+                    if row.opponent.isEmpty {
+                        Image(systemName: "questionmark.circle")
+                            .font(.title3)
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 44)
+                    } else {
+                        PokemonIcons(names: PokemonIcon.split(row.opponent), size: 26)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(row.opponent.isEmpty ? "Sin anotar" : row.opponent).fontWeight(.medium)
+                        Text("\(stats.total) \(stats.total == 1 ? "partida" : "partidas") · \(stats.wins)-\(stats.losses)-\(stats.ties)")
+                            .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                    }
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    MatchupBar(stats: stats, barWidth: 44).fixedSize()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(winRateColor(stats.winRate).opacity(0.06))
+            }
+        }
+        .padding(.bottom, 8)
+    }
+
+    private var fullBody: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Text("Mazo rival").frame(maxWidth: .infinity, alignment: .leading)

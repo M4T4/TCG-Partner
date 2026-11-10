@@ -184,7 +184,7 @@ struct EventPage: View {
                 Label("Partida en PTCG Live…", systemImage: MatchKind.online.symbol)
             }
         } label: {
-            Label(compact ? "Partida" : "Registrar partida", systemImage: "plus")
+            OneLineLabel(title: compact ? "Partida" : "Registrar partida", systemImage: "plus")
                 .frame(maxWidth: fullWidth ? .infinity : nil)
         }
         .fixedSize(horizontal: !fullWidth, vertical: true)

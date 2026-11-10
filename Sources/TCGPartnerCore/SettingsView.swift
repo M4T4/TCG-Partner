@@ -22,6 +22,11 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            #if os(iOS)
+            // En iPhone la pantalla es larga: el tema va primero para encontrarlo sin bajar.
+            themeSection
+            #endif
+
             Section {
                 PlayerFields(blankOption: "Ninguno")
             } header: {
@@ -63,18 +68,9 @@ struct SettingsView: View {
 
             CloudSection()
 
-            Section("Tema") {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 12)], spacing: 12) {
-                    ForEach(AppTheme.allCases) { option in
-                        ThemeSwatch(theme: option, isSelected: option == theme) { theme = option }
-                    }
-                }
-                .padding(.vertical, 6)
-                Picker("Apariencia", selection: $appearance) {
-                    ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
-            }
+            #if os(macOS)
+            themeSection
+            #endif
 
             Section("Datos") {
                 LabeledContent("Mazos guardados", value: "\(decks.decks.count)")
@@ -102,6 +98,21 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity)
         .background(AppBackground())
         .navigationTitle("Configuración")
+    }
+
+    private var themeSection: some View {
+        Section("Tema") {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 12)], spacing: 12) {
+                ForEach(AppTheme.allCases) { option in
+                    ThemeSwatch(theme: option, isSelected: option == theme) { theme = option }
+                }
+            }
+            .padding(.vertical, 6)
+            Picker("Apariencia", selection: $appearance) {
+                ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+        }
     }
 
     private func addUsername() {
