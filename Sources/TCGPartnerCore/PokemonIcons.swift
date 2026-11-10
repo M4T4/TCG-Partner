@@ -66,7 +66,7 @@ struct PokemonIconView: View {
     var body: some View {
         ZStack {
             if let image {
-                Image(nsImage: image)
+                Image(platformImage: image)
                     .resizable()
                     .interpolation(.none) // pixel art: sin suavizar
                     .aspectRatio(contentMode: .fit)

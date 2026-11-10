@@ -393,6 +393,13 @@ Para cambiar el icono, pon una imagen cuadrada en `Resources/AppIconSource.png` 
 
 ## Mac e iPhone
 
+La app de iPhone está en `iOS/`: un solo archivo (`iOS/TCGPartner/TCGPartnerApp.swift`) y `iOS/project.yml`. El `.xcodeproj` se genera con XcodeGen (`brew install xcodegen`) y no se guarda en git:
+
+```sh
+./scripts/ios-project.sh          # genera iOS/TCGPartner.xcodeproj
+open iOS/TCGPartner.xcodeproj     # elige un simulador o tu iPhone y dale a ▶︎
+```
+
 `TCGPartnerCore` no importa AppKit ni UIKit directamente salvo en `Platform.swift` y en bloques `#if os(macOS)`. Si necesitas algo de una sola plataforma (portapapeles, Finder, imprimir…), añádelo a `Platform.swift` con su versión para cada una, o envuélvelo en `#if os(macOS)`. En iPhone, imprimir es "Compartir o imprimir PDF" (`DecklistPDFExport`).
 
 ## Cómo añadir una función nueva

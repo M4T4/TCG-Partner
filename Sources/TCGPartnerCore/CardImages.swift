@@ -210,7 +210,7 @@ struct CardImage: View {
     var body: some View {
         ZStack {
             if let image {
-                Image(nsImage: image)
+                Image(platformImage: image)
                     .resizable()
                     .interpolation(.high)
             } else if failed {
