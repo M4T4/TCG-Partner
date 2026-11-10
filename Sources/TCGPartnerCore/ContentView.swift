@@ -192,13 +192,21 @@ struct ContentView: View {
     }
 
     #if DEBUG
-    /// `-openSheet matchDetail|matchEditor|newMatch|eventPage|eventEditor` al lanzar, para revisar hojas en el simulador.
+    /// `-openSheet matchDetail|matchEditor|newMatch|eventPage|eventEditor|archetypePage|archetypeEditor|deckPage` al lanzar, para revisar hojas en el simulador.
     private func openDebugSheet() {
         let latest = matches.items.max { $0.date < $1.date }
         switch UserDefaults.standard.string(forKey: "openSheet") {
         case "matchDetail": if let latest { sheet = .matchDetail(latest.id) }
         case "matchEditor": if let latest { sheet = .match(latest, isNew: false) }
         case "newMatch": actions.logMatch(nil)
+        case "archetypePage":
+            if let archetype = archetypes.items.max(by: { store.decks(ofArchetype: $0.id).count < store.decks(ofArchetype: $1.id).count }) {
+                show(.archetype(archetype.id))
+            }
+        case "archetypeEditor":
+            if let archetype = archetypes.items.first { sheet = .archetype(archetype, isNew: false) }
+        case "deckPage":
+            if let deck = store.decks.max(by: { $0.modified < $1.modified }) { show(.deck(deck.id)) }
         case "eventPage", "eventEditor":
             // El evento con más partidas, para ver la página llena.
             let event = events.items.max { a, b in
