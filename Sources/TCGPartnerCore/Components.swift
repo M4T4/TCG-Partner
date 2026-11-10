@@ -341,3 +341,56 @@ struct AdaptiveStack<Content: View>: View {
         }
     }
 }
+
+/// Hoja con un formulario y sus botones: en Mac, Eliminar / Cancelar / Confirmar abajo; en iPhone,
+/// Cancelar y Confirmar en la barra superior y Eliminar en la barra inferior.
+struct EditorSheet<Content: View>: View {
+    let title: String
+    let confirmLabel: String
+    var canConfirm = true
+    /// `nil` oculta el botón Eliminar (p. ej. al crear).
+    var onDelete: (() -> Void)?
+    let onConfirm: () -> Void
+    @ViewBuilder var content: Content
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        #if os(iOS)
+        NavigationStack {
+            content
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancelar", role: .cancel) { dismiss() }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(confirmLabel, action: onConfirm).disabled(!canConfirm)
+                    }
+                    if let onDelete {
+                        ToolbarItem(placement: .bottomBar) {
+                            Button("Eliminar", role: .destructive, action: onDelete)
+                                .foregroundStyle(.red)
+                        }
+                    }
+                }
+        }
+        #else
+        VStack(spacing: 0) {
+            content
+            HStack {
+                if let onDelete {
+                    Button("Eliminar", role: .destructive, action: onDelete)
+                }
+                Spacer()
+                Button("Cancelar", role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button(confirmLabel, action: onConfirm)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!canConfirm)
+            }
+            .padding(16)
+        }
+        #endif
+    }
+}

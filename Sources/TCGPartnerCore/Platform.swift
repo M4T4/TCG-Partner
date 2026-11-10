@@ -148,6 +148,25 @@ extension View {
         #endif
     }
 
+    /// En iPhone los campos de texto de un formulario no muestran su nombre (solo el ejemplo, y solo
+    /// mientras están vacíos): esto lo pone a la izquierda. En Mac el formulario ya lo muestra.
+    func formLabel(_ label: String) -> some View {
+        #if os(iOS)
+        LabeledContent(label) { multilineTextAlignment(.trailing) }
+        #else
+        self
+        #endif
+    }
+
+    /// Teclado numérico en iPhone.
+    func decimalKeyboard() -> some View {
+        #if os(iOS)
+        keyboardType(.decimalPad)
+        #else
+        self
+        #endif
+    }
+
     /// La tecla ⌫ en Mac (en iPhone se borra con gestos o menús).
     func onDeleteKey(perform action: @escaping () -> Void) -> some View {
         #if os(macOS)

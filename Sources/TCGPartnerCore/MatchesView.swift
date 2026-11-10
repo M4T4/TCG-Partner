@@ -339,7 +339,9 @@ struct MatchEditor: View {
                 Section("Rival") {
                     TextField("Jugador", text: $match.opponent,
                               prompt: Text(match.currentKind == .online ? "Se llena con el battle log" : "Nombre del rival"))
+                        .formLabel("Jugador")
                     TextField("Mazo del rival", text: $match.opponentArchetype, prompt: Text("Ej. Gardevoir ex"))
+                        .formLabel("Mazo")
                     suggestionChips
                 }
                 Section {
@@ -354,6 +356,7 @@ struct MatchEditor: View {
                         TextField("Ronda o mesa", text: Binding(get: { match.round ?? "" },
                                                                 set: { match.round = $0.isEmpty ? nil : $0 }),
                                   prompt: Text("Ej. Ronda 3 · Mesa 12"))
+                            .formLabel("Ronda o mesa")
                     }
                     TextField("Notas", text: $match.notes, axis: .vertical)
                         .lineLimit(2...4)

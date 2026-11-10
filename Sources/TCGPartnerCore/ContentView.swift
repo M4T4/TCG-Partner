@@ -192,13 +192,25 @@ struct ContentView: View {
     }
 
     #if DEBUG
-    /// `-openSheet matchDetail|matchEditor|newMatch` al lanzar, para revisar hojas en el simulador.
+    /// `-openSheet matchDetail|matchEditor|newMatch|eventPage|eventEditor` al lanzar, para revisar hojas en el simulador.
     private func openDebugSheet() {
         let latest = matches.items.max { $0.date < $1.date }
         switch UserDefaults.standard.string(forKey: "openSheet") {
         case "matchDetail": if let latest { sheet = .matchDetail(latest.id) }
         case "matchEditor": if let latest { sheet = .match(latest, isNew: false) }
         case "newMatch": actions.logMatch(nil)
+        case "eventPage", "eventEditor":
+            // El evento con más partidas, para ver la página llena.
+            let event = events.items.max { a, b in
+                matches.items.filter { $0.eventID == a.id }.count < matches.items.filter { $0.eventID == b.id }.count
+            }
+            if let event {
+                if UserDefaults.standard.string(forKey: "openSheet") == "eventPage" {
+                    show(.event(event.id))
+                } else {
+                    sheet = .event(event, isNew: false)
+                }
+            }
         default: break
         }
     }
