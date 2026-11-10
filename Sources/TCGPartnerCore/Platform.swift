@@ -43,6 +43,17 @@ enum Clipboard {
         #endif
     }
 
+    /// El portapapeles para rellenar algo automáticamente (sin que lo pidas). En iPhone es `nil`:
+    /// leerlo por cuenta propia hace que iOS pregunte «¿Permitir pegar?» cada vez; ahí se usa
+    /// `PasteTextButton`, que no pregunta.
+    @MainActor static var automaticString: String? {
+        #if os(macOS)
+        string
+        #else
+        nil
+        #endif
+    }
+
     @MainActor static func copy(_ text: String) {
         #if os(macOS)
         NSPasteboard.general.clearContents()
@@ -218,6 +229,29 @@ extension View {
         frame(minWidth: minWidth, idealWidth: idealWidth, minHeight: minHeight, idealHeight: idealHeight)
         #else
         self
+        #endif
+    }
+}
+
+/// «Pegar del portapapeles»: en Mac, un botón normal; en iPhone, el botón Pegar del sistema
+/// (no muestra el aviso «¿Permitir pegar?»).
+struct PasteTextButton: View {
+    var title = "Pegar del portapapeles"
+    let onPaste: (String) -> Void
+
+    var body: some View {
+        #if os(macOS)
+        Button(title) {
+            if let text = Clipboard.string { onPaste(text) }
+        }
+        #else
+        PasteButton(payloadType: String.self) { strings in
+            if let text = strings.first {
+                Task { @MainActor in onPaste(text) }
+            }
+        }
+        .buttonBorderShape(.capsule)
+        .controlSize(.small)
         #endif
     }
 }

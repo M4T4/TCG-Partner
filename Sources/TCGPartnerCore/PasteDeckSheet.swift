@@ -15,7 +15,7 @@ enum DeckEditorRequest: Identifiable {
 
     /// Mazo nuevo con el portapapeles ya pegado si contiene una lista.
     @MainActor static func fromClipboard(at location: DeckLocation) -> DeckEditorRequest {
-        let text = Clipboard.string ?? ""
+        let text = Clipboard.automaticString ?? ""
         return .create(prefill: DeckParser.parse(text).isEmpty ? "" : text, at: location)
     }
 }
@@ -79,9 +79,20 @@ struct PasteDeckSheet: View {
     }
 
     var body: some View {
+        EditorSheet(title: title, confirmLabel: isEditing ? "Guardar" : "Crear mazo", canConfirm: canSave, onConfirm: save) {
+            content
+        }
+        .sheetFrame(minWidth: 520, idealWidth: 560, minHeight: 520, idealHeight: 620)
+        .onAppear(perform: load)
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 12) {
+            #if os(macOS)
+            // En iPhone el título va en la barra de la hoja.
             Text(title)
                 .font(.title2.bold())
+            #endif
 
             TextField("Nombre del mazo", text: $name, prompt: Text(parsed.suggestedName))
                 .textFieldStyle(.roundedBorder)
@@ -94,10 +105,8 @@ struct PasteDeckSheet: View {
                 HStack {
                     Text("Lista").font(.headline)
                     Spacer()
-                    Button("Pegar del portapapeles") {
-                        list = Clipboard.string ?? list
-                    }
-                    .linkButtonStyle()
+                    PasteTextButton { list = $0 }
+                        .linkButtonStyle()
                 }
                 TextEditor(text: $list)
                     .font(.system(.body, design: .monospaced))
@@ -117,26 +126,21 @@ struct PasteDeckSheet: View {
             }
 
             summary
-
-            HStack {
-                Spacer()
-                Button("Cancelar", role: .cancel) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Button(isEditing ? "Guardar" : "Crear mazo") { save() }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!canSave)
-            }
         }
-        .padding(20)
-        .sheetFrame(minWidth: 520, idealWidth: 560, minHeight: 520, idealHeight: 620)
-        .onAppear(perform: load)
+        .padding(EdgeInsets(top: 20, leading: 20, bottom: 4, trailing: 20))
     }
 
     /// Elegir si el mazo va directo en el arquetipo, en una de sus carpetas o en una carpeta nueva.
     private func folderPicker(_ archetype: Archetype) -> some View {
         VStack(alignment: .leading, spacing: 6) {
+            // Con LabeledContent el nombre «Carpeta» se ve también en iPhone (su menú solo muestra el valor).
+            LabeledContent("Carpeta") {
             Picker("Carpeta", selection: $folderChoice) {
+                #if os(macOS)
                 Text("Sin carpeta (directo en «\(archetype.name)»)").tag(FolderChoice.none)
+                #else
+                Text("Sin carpeta").tag(FolderChoice.none)
+                #endif
                 let folders = store.folders(of: archetype.id)
                 if !folders.isEmpty {
                     Divider()
@@ -146,6 +150,12 @@ struct PasteDeckSheet: View {
                 }
                 Divider()
                 Label("Carpeta nueva…", systemImage: "folder.badge.plus").tag(FolderChoice.new)
+            }
+            .labelsHidden()
+            #if os(macOS)
+            .fixedSize()
+            #endif
+            Spacer(minLength: 0)
             }
             if folderChoice == .new {
                 TextField("Nombre de la carpeta nueva", text: $newFolderName, prompt: Text("Ej. Regionales"))

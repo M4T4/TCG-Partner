@@ -393,9 +393,7 @@ struct MatchEditor: View {
                     }
                 }
             HStack {
-                Button("Pegar del portapapeles") {
-                    log = Clipboard.string ?? log
-                }
+                PasteTextButton { log = $0 }
                 Spacer()
                 if !log.isEmpty {
                     Button("Borrar", role: .destructive) { log = "" }
@@ -505,7 +503,7 @@ struct MatchEditor: View {
         if let saved = match.battleLog {
             log = saved
         } else if isNew, match.currentKind == .online,
-                  let clipboard = Clipboard.string, BattleLogParser.parse(clipboard) != nil {
+                  let clipboard = Clipboard.automaticString, BattleLogParser.parse(clipboard) != nil {
             // Si acabas de copiar el log en PTCG Live, ya viene pegado.
             log = clipboard
         }

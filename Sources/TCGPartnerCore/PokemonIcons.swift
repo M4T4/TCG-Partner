@@ -203,7 +203,10 @@ struct IconsEditorSheet: View {
     let onSave: ([String]) -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
+        EditorSheet(title: "Iconos", confirmLabel: "Guardar", onConfirm: {
+            onSave(names)
+            dismiss()
+        }) {
             Form {
                 Section {
                     IconPicker(names: $names, suggestions: suggestions, placeholder: inherited)
@@ -218,17 +221,6 @@ struct IconsEditorSheet: View {
                 }
             }
             .formStyle(.grouped)
-            HStack {
-                Spacer()
-                Button("Cancelar", role: .cancel) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Guardar") {
-                    onSave(names)
-                    dismiss()
-                }
-                .keyboardShortcut(.defaultAction)
-            }
-            .padding(16)
         }
         .sheetFrame(width: 520, height: 340)
     }

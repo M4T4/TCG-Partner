@@ -37,13 +37,7 @@ struct PrintDeckSheet: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            form
-                .frame(width: 330)
-            Divider()
-            preview
-        }
-        .sheetFrame(minWidth: 1000, idealWidth: 1080, minHeight: 700, idealHeight: 780)
+        layout
         .alert("Error", isPresented: Binding(get: { playerStore.errorMessage != nil },
                                              set: { if !$0 { playerStore.errorMessage = nil } })) {
             Button("Aceptar", role: .cancel) {}
@@ -52,11 +46,73 @@ struct PrintDeckSheet: View {
         }
     }
 
+    #if os(macOS)
+    /// Mac: formulario a la izquierda y vista previa grande a la derecha.
+    private var layout: some View {
+        HStack(spacing: 0) {
+            form
+                .frame(width: 330)
+            Divider()
+            preview
+        }
+        .sheetFrame(minWidth: 1000, idealWidth: 1080, minHeight: 700, idealHeight: 780)
+    }
+    #else
+    /// iPhone y iPad: la vista previa arriba, las opciones debajo y «Compartir» en la barra (desde ahí
+    /// se imprime, se guarda en Archivos o se envía).
+    private var layout: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    preview
+                        .frame(height: 440)
+                        .listRowInsets(EdgeInsets())
+                }
+                formSections
+            }
+            .navigationTitle("Hoja del mazo")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cerrar") { dismiss() }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    if let deck {
+                        ShareLink(item: DecklistPDFExport(name: "\(deck.name) - decklist.pdf", render: pdfData),
+                                  preview: SharePreview("\(deck.name) - decklist.pdf")) {
+                            Label("Compartir o imprimir PDF", systemImage: "square.and.arrow.up")
+                        }
+                    }
+                }
+            }
+        }
+    }
+    #endif
+
     // MARK: - Formulario
 
+    #if os(macOS)
     private var form: some View {
         VStack(spacing: 0) {
-            Form {
+            Form { formSections }
+                .formStyle(.grouped)
+
+            HStack {
+                Button("Cerrar") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Spacer()
+                Button("Exportar PDF…", action: exportPDF)
+                Button("Imprimir…", action: printPDF)
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(14)
+            .disabled(deck == nil)
+        }
+    }
+    #endif
+
+    @ViewBuilder
+    private var formSections: some View {
                 Section("Jugador") {
                     PlayerFields(blankOption: "En blanco (rellenar a mano)")
                     Picker("Formato", selection: $format) {
@@ -92,41 +148,17 @@ struct PrintDeckSheet: View {
                     Picker("Idioma de la hoja", selection: $language) {
                         ForEach(PrintLanguage.allCases) { Text($0.title).tag($0) }
                     }
-                    .pickerStyle(.segmented)
+                    .labeledSegmentedPickerStyle()
                     Picker("Papel", selection: $paper) {
                         ForEach(PaperSize.allCases) { Text($0.title).tag($0) }
                     }
-                    .pickerStyle(.segmented)
+                    .labeledSegmentedPickerStyle()
                     Picker("Tinta", selection: $color) {
                         Text("Color").tag(true)
                         Text("Blanco y negro").tag(false)
                     }
-                    .pickerStyle(.segmented)
+                    .labeledSegmentedPickerStyle()
                 }
-            }
-            .formStyle(.grouped)
-
-            HStack {
-                Button("Cerrar") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Spacer()
-                #if os(macOS)
-                Button("Exportar PDF…", action: exportPDF)
-                Button("Imprimir…", action: printPDF)
-                    .keyboardShortcut(.defaultAction)
-                #else
-                // En iPhone, el menú de compartir ya ofrece imprimir, guardar en Archivos o enviar.
-                if let deck {
-                    ShareLink(item: DecklistPDFExport(name: "\(deck.name) - decklist.pdf", render: pdfData),
-                              preview: SharePreview("\(deck.name) - decklist.pdf")) {
-                        Label("Compartir o imprimir PDF", systemImage: "square.and.arrow.up")
-                    }
-                }
-                #endif
-            }
-            .padding(14)
-            .disabled(deck == nil)
-        }
     }
 
     private var notes: Binding<String> {

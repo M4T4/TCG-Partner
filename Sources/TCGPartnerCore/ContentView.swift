@@ -199,6 +199,22 @@ struct ContentView: View {
         case "matchDetail": if let latest { sheet = .matchDetail(latest.id) }
         case "matchEditor": if let latest { sheet = .match(latest, isNew: false) }
         case "newMatch": actions.logMatch(nil)
+        case "newDeck":
+            if let archetype = archetypes.items.max(by: { store.folders(of: $0.id).count < store.folders(of: $1.id).count }) {
+                sheet = .deckList(.create(prefill: "", at: .archetype(archetype.id)))
+            }
+        case "journal":
+            if let archetype = archetypes.items.max(by: { a, b in
+                journal.items.filter { $0.archetypeID == a.id }.count < journal.items.filter { $0.archetypeID == b.id }.count
+            }) {
+                show(.journal(archetype.id, entry: nil))
+            }
+        case "journalEntry":
+            if let entry = journal.items.first { show(.journal(entry.archetypeID, entry: entry.id)) }
+        case "print":
+            if let deck = store.decks.first { sheet = .print(deck.id) }
+        case "editList":
+            if let deck = store.decks.first { sheet = .deckList(.edit(deck.id)) }
         case "archetypePage":
             if let archetype = archetypes.items.max(by: { store.decks(ofArchetype: $0.id).count < store.decks(ofArchetype: $1.id).count }) {
                 show(.archetype(archetype.id))

@@ -29,6 +29,7 @@ struct JournalView: View {
     @State private var selectedID: UUID?
     @State private var kindFilter: JournalKind?
     @State private var query = ""
+    @CompactWidth private var compact
 
     private var entries: [JournalEntry] {
         journal.items.filter { $0.archetypeID == archetype.id }
@@ -39,6 +40,35 @@ struct JournalView: View {
     }
 
     var body: some View {
+        if compact { compactBody } else { fullBody }
+    }
+
+    /// iPhone: la lista ocupa la pantalla; al tocar una anotación se abre su editor encima.
+    private var compactBody: some View {
+        sidebar
+            .background(AppBackground())
+            .navigationTitle(archetype.name)
+            #if os(iOS)
+            .navigationBarTitleDisplayMode(.inline)
+            #endif
+            .navigationDestination(item: $selectedID) { id in
+                JournalEditor(entryID: id, archetype: archetype, actions: actions) { selectedID = nil }
+                    .background(AppBackground())
+                    .navigationTitle("Journal")
+                    #if os(iOS)
+                    .navigationBarTitleDisplayMode(.inline)
+                    #endif
+            }
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) { newMenu }
+            }
+            .onAppear {
+                // Solo se abre una anotación si vienes a ella (p. ej. desde una partida).
+                if let initialEntry, selectedID == nil { selectedID = initialEntry }
+            }
+    }
+
+    private var fullBody: some View {
         HStack(spacing: 0) {
             sidebar
                 .frame(width: 310)
@@ -245,6 +275,9 @@ private struct JournalEditor: View {
     @State private var draft: JournalEntry?
     @State private var pendingSave: Task<Void, Never>?
     @State private var confirmDelete = false
+    @CompactWidth private var compact
+
+    private var inset: CGFloat { compact ? 16 : 28 }
 
     var body: some View {
         Group {
@@ -270,7 +303,7 @@ private struct JournalEditor: View {
     private func editor(_ entry: JournalEntry) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             toolbar(entry)
-                .padding(.horizontal, 28)
+                .padding(.horizontal, inset)
                 .padding(.top, 20)
             TextField("Título", text: binding.title, prompt: Text("Título"),
                       axis: .vertical)
@@ -278,17 +311,17 @@ private struct JournalEditor: View {
                 .font(.system(size: 26, weight: .bold))
                 .lineLimit(1...3)
                 .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 28)
+                .padding(.horizontal, inset)
                 .padding(.top, 16)
             meta(entry)
-                .padding(.horizontal, 28)
+                .padding(.horizontal, inset)
                 .padding(.top, 12)
             Divider().padding(.top, 14)
             TextEditor(text: binding.body)
                 .font(.system(size: 15))
                 .lineSpacing(4)
                 .scrollContentBackground(.hidden)
-                .padding(.horizontal, 23)
+                .padding(.horizontal, inset - 5)
                 .padding(.top, 14)
         }
         .confirmationDialog("¿Eliminar esta anotación?", isPresented: $confirmDelete) {
@@ -318,6 +351,7 @@ private struct JournalEditor: View {
             Spacer()
             Button { binding.wrappedValue.pinned.toggle() } label: {
                 Label(entry.pinned ? "Fijada" : "Fijar", systemImage: entry.pinned ? "pin.fill" : "pin")
+                    .labelStyle(compact ? AnyLabelStyle(.iconOnly) : AnyLabelStyle(.titleAndIcon))
             }
             .tint(entry.pinned ? .orange : nil)
             .help("Las anotaciones fijadas aparecen en «Para recordar» de la página del arquetipo")
@@ -413,4 +447,15 @@ struct PinnedJournalPanel: View {
             }
         }
     }
+}
+
+/// Para elegir el estilo de una etiqueta según el ancho.
+struct AnyLabelStyle: LabelStyle {
+    private let make: (Configuration) -> AnyView
+
+    init<S: LabelStyle>(_ style: S) {
+        make = { AnyView(Label($0).labelStyle(style)) }
+    }
+
+    func makeBody(configuration: Configuration) -> some View { make(configuration) }
 }
