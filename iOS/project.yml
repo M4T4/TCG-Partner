@@ -1,0 +1,50 @@
+# Proyecto de la app de iPhone. El .xcodeproj se genera con:  ./scripts/ios-project.sh
+# (no se guarda en git; este archivo sí).
+name: TCGPartner
+options:
+  bundleIdPrefix: dev.matt
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+packages:
+  TCGPartner:
+    path: ..
+targets:
+  TCGPartner-iOS:
+    type: application
+    platform: iOS
+    sources:
+      - TCGPartner
+    dependencies:
+      - package: TCGPartner
+        product: TCGPartnerCore
+    info:
+      path: TCGPartner/Info.plist
+      properties:
+        CFBundleDisplayName: TCG Partner
+        CFBundleDevelopmentRegion: es
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.matt.TCGPartner
+        PRODUCT_NAME: TCGPartner
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: 7ZMZF8V58A
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

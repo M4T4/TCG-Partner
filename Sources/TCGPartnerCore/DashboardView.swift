@@ -10,6 +10,8 @@ enum StatsScope: String, CaseIterable, Identifiable {
 struct AppActions {
     var select: (SidebarItem) -> Void
     var newDeck: () -> Void
+    /// Mazo nuevo en un lugar concreto (p. ej. dentro de un arquetipo), con el portapapeles ya pegado si es una lista.
+    var newDeckAt: (DeckLocation) -> Void
     var logMatch: (_ deckID: UUID?) -> Void
     /// Registrar una partida de un tipo concreto (PTCG Live o presencial).
     var logMatchOfKind: (_ deckID: UUID?, _ kind: MatchKind) -> Void
@@ -30,6 +32,7 @@ struct DashboardView: View {
 
     @AppStorage("dashboard.scope") private var scope = StatsScope.season
     @State private var showAllArchetypes = false
+    @CompactWidth private var compact
 
     private var season: Int { AgeDivision.season(on: Date()) }
 
@@ -62,38 +65,69 @@ struct DashboardView: View {
                         sideColumn(analytics)
                     }
                 }
-                .padding(28)
+                .padding(compact ? 16 : 28)
                 .frame(maxWidth: 1280)
                 .frame(maxWidth: .infinity)
             }
+            #if DEBUG
+            // Para capturas: `-scrollAnchor 0.5` abre el dashboard a media altura.
+            .defaultScrollAnchor(UnitPoint(x: 0, y: UserDefaults.standard.double(forKey: "scrollAnchor")))
+            #endif
         }
         .background(AppBackground())
     }
 
     // MARK: - Cabecera y tarjetas
 
+    private var subtitle: String {
+        "\(scope == .season ? "Temporada \(season)" : "Todo el historial") · \(scopedMatches.count == 1 ? "1 partida" : "\(scopedMatches.count) partidas")"
+    }
+
+    private var scopePicker: some View {
+        Picker("Periodo", selection: $scope) {
+            Text(verbatim: "Temporada \(season)").tag(StatsScope.season)
+            Text("Todo").tag(StatsScope.all)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+    }
+
+    @ViewBuilder
     private var header: some View {
-        HStack(alignment: .bottom) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Dashboard").font(.largeTitle.bold())
-                Text("\(scope == .season ? "Temporada \(season)" : "Todo el historial") · \(scopedMatches.count == 1 ? "1 partida" : "\(scopedMatches.count) partidas")")
-                    .foregroundStyle(.secondary)
+        if compact {
+            // En iPhone el título va en la barra de navegación; aquí solo el periodo y las acciones.
+            VStack(alignment: .leading, spacing: 12) {
+                Text(subtitle).foregroundStyle(.secondary)
+                scopePicker
+                HStack {
+                    Button { actions.logMatch(nil) } label: {
+                        OneLineLabel(title: "Registrar partida", short: "Partida", systemImage: "plus.circle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    Button(action: actions.newDeck) {
+                        OneLineLabel(title: "Nuevo mazo", short: "Mazo", systemImage: "plus")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                }
             }
-            Spacer()
-            Picker("Periodo", selection: $scope) {
-                Text(verbatim: "Temporada \(season)").tag(StatsScope.season)
-                Text("Todo").tag(StatsScope.all)
+        } else {
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Dashboard").font(.largeTitle.bold())
+                    Text(subtitle).foregroundStyle(.secondary)
+                }
+                Spacer()
+                scopePicker.fixedSize()
+                Button { actions.logMatch(nil) } label: {
+                    Label("Registrar partida", systemImage: "plus.circle")
+                }
+                Button(action: actions.newDeck) {
+                    Label("Nuevo mazo", systemImage: "plus")
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            Button { actions.logMatch(nil) } label: {
-                Label("Registrar partida", systemImage: "plus.circle")
-            }
-            Button(action: actions.newDeck) {
-                Label("Nuevo mazo", systemImage: "plus")
-            }
-            .buttonStyle(.borderedProminent)
         }
     }
 
@@ -107,7 +141,7 @@ struct DashboardView: View {
         }()
         let active = decks.decks.filter { $0.currentStatus != .retired }
         let next = upcomingEvents.first
-        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: 4), spacing: 14) {
+        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: compact ? 2 : 4), spacing: compact ? 10 : 14) {
             StatCard(title: "Win rate", value: percentText(stats.winRate), valueColor: winRateColor(stats.winRate),
                      detail: delta ?? (stats.total > 0 ? "Récord \(stats.record)" : "Sin partidas registradas"),
                      symbol: "chart.line.uptrend.xyaxis")
@@ -147,15 +181,40 @@ struct DashboardView: View {
             if rows.isEmpty {
                 emptyState("Crea un arquetipo (por ejemplo «Alakazam») y relaciónale carpetas de mazos.",
                            button: "Nuevo arquetipo") { actions.editArchetype(nil) }
+            } else if compact {
+                VStack(spacing: 0) {
+                    ForEach(Array(visible.enumerated()), id: \.element.id) { index, row in
+                        if index > 0 { Divider().padding(.leading, 16) }
+                        CompactStatRow(title: row.name, detail: gamesDetail(row.stats), rate: row.stats.winRate) {
+                            ArchetypeIcon(archetype: row.archetype, size: 26)
+                        }
+                        .onTapGesture {
+                            if let archetype = row.archetype { actions.select(.archetype(archetype.id)) }
+                        }
+                    }
+                }
+                .padding(.bottom, rows.count > 6 ? 0 : 6)
+                if rows.count > 6 {
+                    Divider()
+                    Button(showAllArchetypes ? "Mostrar menos" : "Ver todos los arquetipos (\(rows.count))") {
+                        showAllArchetypes.toggle()
+                    }
+                    .linkButtonStyle()
+                    .font(.caption)
+                    .frame(maxWidth: .infinity)
+                    .padding(10)
+                }
             } else {
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 0) {
                     GridRow {
                         Text("Arquetipo")
-                        Text("Carpetas").gridColumnAlignment(.trailing)
-                        Text("Mazos").gridColumnAlignment(.trailing)
+                        if !compact {
+                            Text("Carpetas").gridColumnAlignment(.trailing)
+                            Text("Mazos").gridColumnAlignment(.trailing)
+                        }
                         Text("Partidas").gridColumnAlignment(.trailing)
                         Text("Win rate")
-                        Text("")
+                        if !compact { Text("") }
                     }
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -168,10 +227,13 @@ struct DashboardView: View {
                                 Text(row.name).fontWeight(.medium).lineLimit(1)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            Text("\(row.folderCount)").monospacedDigit().foregroundStyle(.secondary)
-                            Text("\(row.deckCount)").monospacedDigit().foregroundStyle(.secondary)
+                            if !compact {
+                                Text("\(row.folderCount)").monospacedDigit().foregroundStyle(.secondary)
+                                Text("\(row.deckCount)").monospacedDigit().foregroundStyle(.secondary)
+                            }
                             Text("\(row.stats.total)").monospacedDigit()
                             WinRateBar(rate: row.stats.winRate)
+                            if !compact {
                             Menu {
                                 if let archetype = row.archetype {
                                     Button("Abrir") { actions.select(.archetype(archetype.id)) }
@@ -184,6 +246,7 @@ struct DashboardView: View {
                             .menuStyle(.borderlessButton)
                             .menuIndicator(.hidden)
                             .fixedSize()
+                            }
                         }
                         .padding(.vertical, 9)
                         .contentShape(Rectangle())
@@ -199,7 +262,7 @@ struct DashboardView: View {
                     Button(showAllArchetypes ? "Mostrar menos" : "Ver todos los arquetipos (\(rows.count))") {
                         showAllArchetypes.toggle()
                     }
-                    .buttonStyle(.link)
+                    .linkButtonStyle()
                     .font(.caption)
                     .frame(maxWidth: .infinity)
                     .padding(10)
@@ -215,15 +278,26 @@ struct DashboardView: View {
         } content: {
             if rows.isEmpty {
                 emptyState("Pega una lista de Limitless para crear tu primer mazo.", button: "Nuevo mazo", action: actions.newDeck)
+            } else if compact {
+                VStack(spacing: 0) {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                        if index > 0 { Divider().padding(.leading, 16) }
+                        CompactStatRow(title: row.deck.name, detail: gamesDetail(row.stats), rate: row.stats.winRate) {
+                            PokemonIcons(names: decks.icons(for: row.deck, archetypes: archetypes), size: 30)
+                        }
+                        .onTapGesture { actions.select(.deck(row.deck.id)) }
+                    }
+                }
+                .padding(.bottom, 6)
             } else {
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 0) {
                     GridRow {
                         Text("Mazo")
-                        Text("Arquetipo")
+                        if !compact { Text("Arquetipo") }
                         Text("Partidas").gridColumnAlignment(.trailing)
-                        Text("V - D")
+                        if !compact { Text("V - D") }
                         Text("Win rate")
-                        Text("Estado").gridColumnAlignment(.trailing)
+                        if !compact { Text("Estado").gridColumnAlignment(.trailing) }
                     }
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -241,15 +315,17 @@ struct DashboardView: View {
                                 }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            if let archetype = row.archetype {
-                                Badge(text: archetype.name, color: archetype.color.color)
-                            } else {
-                                Text("—").foregroundStyle(.tertiary)
+                            if !compact {
+                                if let archetype = row.archetype {
+                                    Badge(text: archetype.name, color: archetype.color.color)
+                                } else {
+                                    Text("—").foregroundStyle(.tertiary)
+                                }
                             }
                             Text("\(row.stats.total)").monospacedDigit()
-                            Text(row.stats.total > 0 ? row.stats.record : "—").monospacedDigit()
+                            if !compact { Text(row.stats.total > 0 ? row.stats.record : "—").monospacedDigit() }
                             WinRateBar(rate: row.stats.winRate)
-                            StatusBadge(status: row.deck.currentStatus)
+                            if !compact { StatusBadge(status: row.deck.currentStatus) }
                         }
                         .padding(.vertical, 9)
                         .contentShape(Rectangle())
@@ -276,7 +352,7 @@ struct DashboardView: View {
         if !events.items.isEmpty {
             Panel(title: "Resultados en eventos", subtitle: "Tu posición y récord en los eventos más recientes") {
                 Button("Ver todos") { actions.select(.events) }
-                    .buttonStyle(.link)
+                    .linkButtonStyle()
             } content: {
                 if finished.isEmpty {
                     emptyState("Todavía no terminas ningún evento en este periodo.", button: nil, action: nil)
@@ -290,8 +366,8 @@ struct DashboardView: View {
     private var recentPanel: some View {
         let recent = scopedMatches.sorted { $0.date > $1.date }.prefix(6)
         return Panel(title: "Actividad reciente") {
-            Button("Historial completo") { actions.select(.matches) }
-                .buttonStyle(.link)
+            Button(compact ? "Ver todas" : "Historial completo") { actions.select(.matches) }
+                .linkButtonStyle()
         } content: {
             if recent.isEmpty {
                 emptyState("Todavía no registras partidas en este periodo.", button: "Registrar partida") { actions.logMatch(nil) }
@@ -408,7 +484,7 @@ struct DashboardView: View {
     private var eventsPanel: some View {
         Panel(title: "Próximos eventos") {
             Button("Ver todos") { actions.select(.events) }
-                .buttonStyle(.link)
+                .linkButtonStyle()
         } content: {
             if upcomingEvents.isEmpty {
                 emptyState("Agrega los torneos a los que piensas ir.", button: "Nuevo evento") { actions.editEvent(nil) }
@@ -449,9 +525,25 @@ struct EventResultsTable: View {
     @EnvironmentObject private var matches: MatchStore
     let events: [TournamentEvent]
     let onSelect: (TournamentEvent) -> Void
+    @CompactWidth private var compact
 
     var body: some View {
         VStack(spacing: 0) {
+            if !compact { header }
+            ForEach(Array(events.enumerated()), id: \.element.id) { index, event in
+                if !compact || index > 0 { Divider() }
+                let eventMatches = matches.items.filter { $0.eventID == event.id }
+                let deck = event.playedDeckID(in: eventMatches).flatMap(decks.deck)
+                EventResultRow(event: event, stats: eventMatches.stats, deckName: deck?.name,
+                               deckIcons: deck.map { decks.icons(for: $0, archetypes: archetypes) } ?? [],
+                               compact: compact)
+                    .onTapGesture { onSelect(event) }
+            }
+        }
+        .padding(.bottom, 4)
+    }
+
+    private var header: some View {
             HStack(spacing: 12) {
                 Text("Posición").frame(width: 92, alignment: .leading)
                 Text("Evento").frame(maxWidth: .infinity, alignment: .leading)
@@ -465,16 +557,6 @@ struct EventResultsTable: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 16)
             .padding(.bottom, 8)
-            ForEach(events) { event in
-                Divider()
-                let eventMatches = matches.items.filter { $0.eventID == event.id }
-                let deck = event.playedDeckID(in: eventMatches).flatMap(decks.deck)
-                EventResultRow(event: event, stats: eventMatches.stats, deckName: deck?.name,
-                               deckIcons: deck.map { decks.icons(for: $0, archetypes: archetypes) } ?? [])
-                    .onTapGesture { onSelect(event) }
-            }
-        }
-        .padding(.bottom, 4)
     }
 }
 
@@ -531,9 +613,53 @@ private struct EventResultRow: View {
     let stats: MatchStats
     let deckName: String?
     let deckIcons: [String]
+    var compact = false
     @State private var hovering = false
 
     var body: some View {
+        if compact { compactBody } else { fullBody }
+    }
+
+    /// iPhone: evento y récord arriba; posición, tipo y fecha debajo.
+    private var compactBody: some View {
+        HStack(spacing: 12) {
+            if !deckIcons.isEmpty { PokemonIcons(names: deckIcons, size: 30) }
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(event.name.isEmpty ? "Evento sin nombre" : event.name)
+                        .fontWeight(.medium)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(stats.total > 0 ? "\(stats.wins)-\(stats.losses)-\(stats.ties)" : "—")
+                        .monospacedDigit()
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(stats.total > 0 ? winRateColor(stats.winRate) : .secondary)
+                        .fixedSize()
+                }
+                HStack(spacing: 4) {
+                    if let finish = event.finish {
+                        Image(systemName: finish.symbol).foregroundStyle(finish.color)
+                        Text(finish.players.map { "\(finish.ordinal) / \($0)" } ?? finish.ordinal)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(finish.color)
+                            .monospacedDigit()
+                        Text("·")
+                    }
+                    Text("\(event.kind.title) · \(event.startDate.formatted(.dateTime.day().month(.abbreviated)))")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            .lineLimit(1)
+            Image(systemName: "chevron.right")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+    }
+
+    private var fullBody: some View {
         HStack(spacing: 12) {
             placement.frame(width: 92, alignment: .leading)
             VStack(alignment: .leading, spacing: 2) {
@@ -599,6 +725,19 @@ private struct EventResultRow: View {
 struct EventSummary: View {
     let event: TournamentEvent
     let deckName: String?
+    /// Muestra la posición como banner en la esquina (vista de Eventos), si el evento la tiene.
+    var showsPlacementBanner = false
+    /// Reserva las líneas vacías (lugar, costo y mazo) para que todas las tarjetas midan lo mismo.
+    var fixedHeight = false
+
+    private static let cornerRadius: CGFloat = 10
+
+    private var banner: Placement? { showsPlacementBanner ? event.finish : nil }
+
+    /// «INSCRITO» solo importa antes del evento; en los pasados ya no se muestra.
+    private var showsRegistered: Bool { event.registered && event.isUpcoming() }
+    /// El botón «ABRIR» sale si no estás inscrito y el evento tiene enlace.
+    private var showsLink: Bool { !event.registered && event.url != nil }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -610,22 +749,32 @@ struct EventSummary: View {
                     Text(event.kind.title).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                if event.registered {
+                if showsRegistered {
                     Badge(text: "INSCRITO", color: .green)
-                } else if let url = event.url {
+                        // Con banner, el chip se recorre a la izquierda del triángulo.
+                        .padding(.trailing, banner == nil ? 0 : PlacementBanner.size * 0.62)
+                } else if showsLink, let url = event.url {
                     Link(destination: url) {
                         Text("ABRIR").font(.caption.weight(.bold))
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
+                    .padding(.trailing, banner == nil ? 0 : PlacementBanner.size * 0.62)
                 }
             }
             Group {
                 Label(dateText, systemImage: "clock")
-                if !event.location.isEmpty { Label(event.location, systemImage: "mappin.and.ellipse") }
+                if !event.location.isEmpty {
+                    Label(event.location, systemImage: "mappin.and.ellipse")
+                } else if fixedHeight {
+                    Label(" ", systemImage: "mappin.and.ellipse").hidden()
+                }
                 HStack(spacing: 12) {
                     if let cost = event.costText { Label(cost, systemImage: "dollarsign.circle") }
                     if let deckName { Label(deckName, systemImage: "rectangle.stack") }
+                    if fixedHeight && event.costText == nil && deckName == nil {
+                        Label(" ", systemImage: "rectangle.stack").hidden()
+                    }
                 }
             }
             .font(.caption)
@@ -633,8 +782,17 @@ struct EventSummary: View {
             .lineLimit(1)
         }
         .padding(12)
+        // Sin chip a la derecha, el título no debe meterse bajo el banner.
+        .padding(.trailing, banner != nil && !showsRegistered && !showsLink ? PlacementBanner.size * 0.45 : 0)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).stroke(.separator.opacity(0.7)))
+        .overlay(alignment: .topTrailing) {
+            if let banner {
+                PlacementBanner(placement: banner)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius))
+            }
+        }
+        .background(RoundedRectangle(cornerRadius: Self.cornerRadius).stroke(.separator.opacity(0.7)))
     }
 
     private var dateText: String {

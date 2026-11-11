@@ -17,12 +17,14 @@ struct EventsView: View {
     }
 
     private let columns = [GridItem(.adaptive(minimum: 280), spacing: 14)]
+    @CompactWidth private var compact
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Eventos").font(.title.bold())
+                    // En iPhone el título ya está en la barra de navegación.
+                    if !compact { Text("Eventos").font(.title.bold()) }
                     let cost = upcoming.compactMap(\.cost).reduce(0, +)
                     Text("\(upcoming.count) próximos" + (cost > 0 ? " · \(cost.formatted(.currency(code: upcoming.first?.currency ?? "MXN"))) en inscripciones" : ""))
                         .foregroundStyle(.secondary)
@@ -30,7 +32,7 @@ struct EventsView: View {
                 section("Próximos", upcoming)
                 if !past.isEmpty { section("Pasados", past) }
             }
-            .padding(24)
+            .padding(compact ? 16 : 24)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(AppBackground())
@@ -62,20 +64,16 @@ struct EventsView: View {
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
                     ForEach(items) { event in
                         VStack(alignment: .leading, spacing: 0) {
-                            EventSummary(event: event, deckName: event.plannedDeckID.flatMap(decks.deck)?.name)
+                            EventSummary(event: event, deckName: event.plannedDeckID.flatMap(decks.deck)?.name,
+                                         showsPlacementBanner: true, fixedHeight: true)
+                            // La línea de resultado ocupa su lugar aunque no haya partidas,
+                            // para que las tarjetas de una misma fila queden alineadas.
                             let record = matches.items.filter { $0.eventID == event.id }.stats
-                            if record.total > 0 || event.finish != nil {
-                                HStack(spacing: 8) {
-                                    if let finish = event.finish { PlacementBadge(placement: finish) }
-                                    if record.total > 0 {
-                                        Text("Resultado: \(record.record) · \(percentText(record.winRate))")
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundStyle(winRateColor(record.winRate))
-                                    }
-                                }
+                            Text(record.total > 0 ? "Resultado: \(record.record) · \(percentText(record.winRate))" : " ")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(winRateColor(record.winRate))
                                 .padding(.top, 6)
                                 .padding(.leading, 4)
-                            }
                         }
                         .contentShape(Rectangle())
                         .onTapGesture { actions.select(.event(event.id)) }
@@ -106,6 +104,15 @@ struct NumberField: View {
     @Binding var value: Int?
     var prompt = ""
     var range: ClosedRange<Int> = 1...9999
+    @FocusState private var focused: Bool
+
+    /// Ajusta el número al rango. Solo al salir del campo o pulsar Enter: si se hiciera en cada tecla,
+    /// el «1» de «15» se convertiría en el mínimo antes de poder escribir el «5».
+    private func clamp() {
+        if let current = value, !range.contains(current) {
+            value = min(max(current, range.lowerBound), range.upperBound)
+        }
+    }
 
     private var stepperValue: Binding<Int> {
         Binding(get: { value ?? range.lowerBound - 1 },
@@ -120,11 +127,9 @@ struct NumberField: View {
                 .textFieldStyle(.roundedBorder)
                 .monospacedDigit()
                 .frame(width: 80)
-                .onChange(of: value) {
-                    if let current = value, !range.contains(current) {
-                        value = min(max(current, range.lowerBound), range.upperBound)
-                    }
-                }
+                .focused($focused)
+                .onSubmit(clamp)
+                .onChange(of: focused) { if !focused { clamp() } }
             Stepper("", value: stepperValue, in: (range.lowerBound - 1)...range.upperBound)
                 .labelsHidden()
         }
@@ -156,10 +161,18 @@ struct EventEditor: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        EditorSheet(title: isNew ? "Nuevo evento" : "Editar evento",
+                    confirmLabel: isNew ? "Crear evento" : "Guardar",
+                    canConfirm: !event.name.trimmingCharacters(in: .whitespaces).isEmpty,
+                    onDelete: isNew ? nil : {
+                        events.delete(event.id)
+                        dismiss()
+                    },
+                    onConfirm: save) {
             Form {
                 Section("Evento") {
                     TextField("Nombre", text: $event.name, prompt: Text("Ej. Regional Monterrey"))
+                        .formLabel("Nombre")
                     Picker("Tipo", selection: $event.kind) {
                         ForEach(EventKind.allCases) { Text($0.title).tag($0) }
                     }
@@ -168,6 +181,12 @@ struct EventEditor: View {
                     }
                     HStack {
                         TextField("Enlace", text: $event.link, prompt: Text("https://…"))
+                            .formLabel("Enlace")
+                            #if os(iOS)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            #endif
                         if let url = event.url {
                             Link(destination: url) { Image(systemName: "arrow.up.right.square") }
                                 .help("Abrir el enlace")
@@ -181,10 +200,13 @@ struct EventEditor: View {
                         DatePicker("Fin", selection: endDate, in: event.startDate..., displayedComponents: .date)
                     }
                     TextField("Lugar", text: $event.location, prompt: Text("Tienda, ciudad o «En línea»"))
+                        .formLabel("Lugar")
                 }
                 Section("Inscripción") {
                     HStack {
                         TextField("Costo", value: cost, format: .number.precision(.fractionLength(0...2)), prompt: Text("0"))
+                            .decimalKeyboard()
+                            .formLabel("Costo")
                         Picker("Moneda", selection: $event.currency) {
                             ForEach(Self.currencies, id: \.self) { Text($0).tag($0) }
                         }
@@ -224,29 +246,18 @@ struct EventEditor: View {
                 }
             }
             .formStyle(.grouped)
-            HStack {
-                if !isNew {
-                    Button("Eliminar", role: .destructive) {
-                        events.delete(event.id)
-                        dismiss()
-                    }
-                }
-                Spacer()
-                Button("Cancelar", role: .cancel) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Button(isNew ? "Crear evento" : "Guardar") {
-                    event.name = event.name.trimmingCharacters(in: .whitespacesAndNewlines)
-                    // Posiciones o jugadores en 0 o negativos no cuentan.
-                    if (event.placement ?? 1) < 1 { event.placement = nil }
-                    if (event.players ?? 1) < 1 { event.players = nil }
-                    events.save(event)
-                    dismiss()
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(event.name.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            .padding(16)
         }
-        .frame(width: 500, height: 720)
+        .sheetFrame(width: 500, height: 720)
+    }
+
+    private func save() {
+        event.name = event.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Posiciones o jugadores en 0 o negativos no cuentan.
+        if (event.placement ?? 1) < 1 { event.placement = nil }
+        if (event.players ?? 1) < 1 { event.players = nil }
+        // Por si se guardó sin salir del campo: no puede haber menos jugadores que tu posición.
+        if let players = event.players, let place = event.placement, players < place { event.players = place }
+        events.save(event)
+        dismiss()
     }
 }

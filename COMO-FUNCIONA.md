@@ -24,8 +24,12 @@ TCG-Partner/
 │   │   ├── Matches.swift      MatchRecord (PTCG Live o presencial), MatchStats, filtro por temporada y Ranking.best
 │   │   ├── BattleLog.swift    Lee el battle log de PTCG Live: jugadores, ganador, turnos, premios, Pokémon
 │   │   └── PokemonIcon.swift  Nombre de carta → icono de Limitless («Alolan Ninetales» → ninetales-alola)
-│   └── TCGPartner/            La app (SwiftUI + AppKit)
-│       ├── TCGPartnerApp.swift   @main, ventana y menús (Archivo › Nuevo mazo…)
+│   ├── TCGPartner/            App de Mac: solo @main, la ventana y el ciclo de vida
+│   │   └── TCGPartnerApp.swift
+│   └── TCGPartnerCore/        Todo lo compartido por Mac e iPhone (librería TCGPartnerCore)
+│       ├── AppModel.swift        AppModel (todos los stores + sincronización), RootView y los menús de Mac
+│       ├── Platform.swift        Lo que cambia entre Mac e iPhone: imágenes, portapapeles, papelera, colores, estilos
+│       ├── SyncService.swift     Login y sincronización con Supabase
 │       ├── Models.swift          Archetype, TournamentEvent, DeckStatus + CollectionStore (JSON genérico)
 │       ├── Analytics.swift       Cruza mazos, arquetipos y partidas: récord por mazo y por arquetipo
 │       ├── Components.swift      Piezas visuales: Panel, StatCard, WinRateBar, badges, PieChart (Swift Charts)
@@ -335,6 +339,20 @@ La **división** se calcula sola a partir del año de nacimiento (`AgeDivision.f
 | Journal | `~/Library/Application Support/TCGPartner/journal.json` |
 | Jugadores guardados | `~/Library/Application Support/TCGPartner/players.json` |
 | Opciones de impresión y último jugador elegido | Preferencias de la app (`defaults read dev.matt.TCGPartner`) |
+| Borrados pendientes de subir a la nube | `~/Library/Application Support/TCGPartner/deleted.json` |
+| Hasta dónde se sincronizó cada tabla | `~/Library/Application Support/TCGPartner/sync-state.json` |
+| Sesión de la nube | Llavero de macOS (servicio `supabase.gotrue.swift`) |
+
+### Preparación para la nube (Supabase)
+
+Cada elemento que se sincroniza (mazos, carpetas, arquetipos, partidas, eventos, journal y jugadores) lleva un `updatedAt` que cambia con **cualquier** cambio, incluso mover un mazo o cambiar sus iconos, que no tocan `modified`. Los JSON anteriores no lo tienen y se leen como `nil`. Las carpetas guardan además un id estable en `folders.json` (`ids`), que se conserva al renombrarlas.
+
+- `DeckKit/Sync.swift`: el protocolo `Syncable`, `upsertStamped` (guarda y marca la fecha solo si el contenido cambió) y `DeletionLog`.
+- `DeletionLogStore` anota en `deleted.json` cada elemento borrado, para que el borrado llegue a los otros equipos.
+- `SupabaseConfig.swift`: URL del proyecto y publishable key.
+- `DeckKit/SyncRows.swift`: convierte modelos ↔ filas con una lista explícita de columnas (`SyncColumn`, `"deckID"` ↔ `"deck_id"`), manda `null` en los campos vacíos para que borrarlos también los borre en la nube, y `SyncMerge` aplica las filas que llegan (gana el `updatedAt` más reciente).
+- `SyncService`: inicia sesión con email y contraseña (Configuración › Nube) y sincroniza al abrir la app, al volver a ella, cada 2 minutos y 4 s después de cada cambio. Por cada tabla (carpetas primero, luego mazos, arquetipos, partidas, eventos, journal y jugadores): **1)** baja lo que cambió en la nube desde la última vez (`server_updated_at`), **2)** sube los borrados de `deleted.json` y **3)** sube lo que cambió aquí desde la última subida. Los JSON locales siguen siendo la copia de trabajo, así que todo funciona sin conexión.
+- `supabase/migrations/`: el esquema. Hay una tabla por cada JSON, con borrado lógico (`deleted_at`) y un `server_updated_at` que pone el servidor para pedir "lo que cambió desde X". Si llega una versión más vieja que la guardada, se ignora. Cada usuario solo ve sus filas (RLS).
 
 `players.json` es una lista:
 
@@ -365,10 +383,24 @@ Cada mazo es un JSON legible:
 ```sh
 swift run                 # abre la app en modo desarrollo
 ./scripts/test.sh         # tests de DeckKit
-./scripts/build-app.sh    # build/TCGPartner.app (release, icono, Info.plist, firma ad-hoc)
+./scripts/build-app.sh    # build/TCGPartner.app (release, icono, Info.plist, firma)
+./scripts/make-signing-cert.sh  # una sola vez: certificado local para firmar
 ```
 
+`build-app.sh` firma con el certificado local «TCG Partner Local Signing» si existe. Así el llavero reconoce la app entre compilaciones y no vuelve a pedir permiso para leer la sesión de la nube. Sin él, firma ad-hoc y el permiso se pide tras cada compilación. Con `swift run` siempre se pide, porque ese binario no se firma.
+
 Para cambiar el icono, pon una imagen cuadrada en `Resources/AppIconSource.png` y vuelve a ejecutar `build-app.sh`.
+
+## Mac e iPhone
+
+La app de iPhone está en `iOS/`: un solo archivo (`iOS/TCGPartner/TCGPartnerApp.swift`) y `iOS/project.yml`. El `.xcodeproj` se genera con XcodeGen (`brew install xcodegen`) y no se guarda en git:
+
+```sh
+./scripts/ios-project.sh          # genera iOS/TCGPartner.xcodeproj
+open iOS/TCGPartner.xcodeproj     # elige un simulador o tu iPhone y dale a ▶︎
+```
+
+`TCGPartnerCore` no importa AppKit ni UIKit directamente salvo en `Platform.swift` y en bloques `#if os(macOS)`. Si necesitas algo de una sola plataforma (portapapeles, Finder, imprimir…), añádelo a `Platform.swift` con su versión para cada una, o envuélvelo en `#if os(macOS)`. En iPhone, imprimir es "Compartir o imprimir PDF" (`DecklistPDFExport`).
 
 ## Cómo añadir una función nueva
 

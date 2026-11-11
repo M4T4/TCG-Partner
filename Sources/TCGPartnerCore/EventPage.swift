@@ -8,6 +8,7 @@ struct EventPage: View {
     @EnvironmentObject private var matches: MatchStore
     let event: TournamentEvent
     let actions: AppActions
+    @CompactWidth private var compact
 
     /// Partidas del evento, por ronda (las que no tienen ronda, al final por fecha).
     private var eventMatches: [MatchRecord] {
@@ -30,10 +31,10 @@ struct EventPage: View {
         let stats = eventMatches.stats
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                header
+                if compact { compactHeader } else { header }
                 statCards(stats)
                 Panel(title: "Partidas por ronda",
-                      subtitle: eventMatches.isEmpty ? nil : "Verde si ganaste, rojo si perdiste. Haz clic para ver todos los datos") {
+                      subtitle: eventMatches.isEmpty ? nil : "Verde si ganaste, rojo si perdiste. \(compact ? "Toca" : "Haz clic") para ver todos los datos") {
                     registerMenu(compact: true)
                 } content: {
                     if eventMatches.isEmpty {
@@ -58,20 +59,59 @@ struct EventPage: View {
                     }
                 }
             }
-            .padding(28)
+            .padding(compact ? 16 : 28)
             .frame(maxWidth: 1180)
             .frame(maxWidth: .infinity)
         }
         .background(AppBackground())
         .navigationTitle(event.name)
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                Button { actions.select(.events) } label: {
-                    Label("Eventos", systemImage: "chevron.left")
+            if compact {
+                // En iPhone ya hay botón para volver; aquí van Editar y el enlace.
+                ToolbarItem(placement: .primaryAction) {
+                    Button("Editar") { actions.editEvent(event) }
                 }
-                .help("Volver a todos los eventos")
+                if let url = event.url {
+                    ToolbarItem(placement: .secondaryAction) {
+                        Link(destination: url) { Label("Abrir enlace", systemImage: "arrow.up.right.square") }
+                    }
+                }
+            } else {
+                ToolbarItem(placement: .navigation) {
+                    Button { actions.select(.events) } label: {
+                        Label("Eventos", systemImage: "chevron.left")
+                    }
+                    .help("Volver a todos los eventos")
+                }
             }
         }
+    }
+
+    /// iPhone: etiquetas, datos uno debajo de otro y el botón de registrar a lo ancho.
+    private var compactHeader: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) { badges }
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Label(dateText, systemImage: "calendar")
+                if !event.location.isEmpty { Label(event.location, systemImage: "mappin.and.ellipse") }
+                if let cost = event.costText { Label(cost, systemImage: "dollarsign.circle") }
+            }
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            registerMenu(compact: false, fullWidth: true)
+                .buttonStyle(.borderedProminent)
+        }
+    }
+
+    @ViewBuilder
+    private var badges: some View {
+        Badge(text: event.kind.title, color: .accentColor)
+        Badge(text: event.format.title, color: .secondary)
+        if event.registered { Badge(text: "INSCRITO", color: .green) }
+        if !event.isUpcoming() { Badge(text: "TERMINADO", color: .secondary) }
+        if let finish = event.finish { PlacementBadge(placement: finish) }
     }
 
     // MARK: - Partes
@@ -79,13 +119,7 @@ struct EventPage: View {
     private var header: some View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    Badge(text: event.kind.title, color: .accentColor)
-                    Badge(text: event.format.title, color: .secondary)
-                    if event.registered { Badge(text: "INSCRITO", color: .green) }
-                    if !event.isUpcoming() { Badge(text: "TERMINADO", color: .secondary) }
-                    if let finish = event.finish { PlacementBadge(placement: finish) }
-                }
+                HStack(spacing: 8) { badges }
                 Text(event.name.isEmpty ? "Evento sin nombre" : event.name)
                     .font(.largeTitle.bold())
                 HStack(spacing: 14) {
@@ -111,7 +145,7 @@ struct EventPage: View {
     private func statCards(_ stats: MatchStats) -> some View {
         // La tarjeta de posición aparece cuando ya la anotaste o cuando el evento terminó.
         let showsPlacement = event.finish != nil || !event.isUpcoming()
-        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: showsPlacement ? 5 : 4), spacing: 14) {
+        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: compact ? 2 : (showsPlacement ? 5 : 4)), spacing: compact ? 10 : 14) {
             if showsPlacement {
                 placementCard
             }
@@ -141,7 +175,7 @@ struct EventPage: View {
             .help("Editar la posición final")
     }
 
-    private func registerMenu(compact: Bool) -> some View {
+    private func registerMenu(compact: Bool, fullWidth: Bool = false) -> some View {
         Menu {
             Button { log(.inPerson) } label: {
                 Label("Partida presencial…", systemImage: MatchKind.inPerson.symbol)
@@ -150,9 +184,10 @@ struct EventPage: View {
                 Label("Partida en PTCG Live…", systemImage: MatchKind.online.symbol)
             }
         } label: {
-            Label(compact ? "Partida" : "Registrar partida", systemImage: "plus")
+            OneLineLabel(title: compact ? "Partida" : "Registrar partida", systemImage: "plus")
+                .frame(maxWidth: fullWidth ? .infinity : nil)
         }
-        .fixedSize()
+        .fixedSize(horizontal: !fullWidth, vertical: true)
     }
 
     private func log(_ kind: MatchKind) {

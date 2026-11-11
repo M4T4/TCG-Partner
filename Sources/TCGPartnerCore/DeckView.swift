@@ -12,10 +12,15 @@ struct DeckView: View {
     let onLogMatch: () -> Void
     let onEditIcons: () -> Void
     @State private var copied = false
+    @CompactWidth private var compact
 
     private var parsed: ParsedDeck { deck.parsed }
 
-    private let columns = [GridItem(.adaptive(minimum: 118, maximum: 170), spacing: 14)]
+    /// En iPhone, 3 cartas por fila.
+    private var columns: [GridItem] {
+        compact ? Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
+            : [GridItem(.adaptive(minimum: 118, maximum: 170), spacing: 14)]
+    }
 
     var body: some View {
         ScrollView {
@@ -32,7 +37,7 @@ struct DeckView: View {
                                     .font(.title3)
                                     .foregroundStyle(.secondary)
                             }
-                            LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
+                            LazyVGrid(columns: columns, alignment: .leading, spacing: compact ? 10 : 14) {
                                 ForEach(cards) { CardTile(entry: $0) }
                             }
                         }
@@ -40,10 +45,49 @@ struct DeckView: View {
                 }
                 notes
             }
-            .padding(24)
+            .padding(compact ? 16 : 24)
         }
         .background(AppBackground())
+        #if os(iOS)
+        // El nombre se edita en la cabecera; arriba solo queda pequeño.
+        .navigationBarTitleDisplayMode(.inline)
+        #endif
         .toolbar {
+            if compact { compactToolbar } else { fullToolbar }
+        }
+    }
+
+    private func copyList() {
+        store.copySelectedList()
+        copied = true
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            copied = false
+        }
+    }
+
+    /// iPhone: Registrar partida a la vista; lo demás en el menú «…».
+    @ToolbarContentBuilder
+    private var compactToolbar: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Button(action: onLogMatch) {
+                Label("Registrar partida", systemImage: "plus.circle")
+            }
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Menu {
+                Button(action: onEditList) { Label("Editar lista", systemImage: "square.and.pencil") }
+                Button(action: copyList) { Label(copied ? "Copiada" : "Copiar lista", systemImage: copied ? "checkmark" : "doc.on.doc") }
+                Button(action: onPrint) { Label("PDF para imprimir", systemImage: "printer") }
+                Button(action: onEditIcons) { Label("Iconos", systemImage: "face.smiling") }
+            } label: {
+                Label("Más", systemImage: "ellipsis")
+            }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var fullToolbar: some ToolbarContent {
             ToolbarItem(placement: .primaryAction) {
                 Button(action: onLogMatch) {
                     Label("Registrar partida", systemImage: "plus.circle")
@@ -63,34 +107,27 @@ struct DeckView: View {
                 .help("Editar la lista del mazo")
             }
             ToolbarItem(placement: .primaryAction) {
-                Button {
-                    store.copySelectedList()
-                    copied = true
-                    Task {
-                        try? await Task.sleep(for: .seconds(1.5))
-                        copied = false
-                    }
-                } label: {
+                Button(action: copyList) {
                     Label(copied ? "Copiada" : "Copiar lista", systemImage: copied ? "checkmark" : "doc.on.doc")
                 }
                 .help("Copiar la lista en formato Limitless / PTCG Live (⇧⌘C)")
             }
-        }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
                 Button(action: onEditIcons) {
-                    PokemonIcons(names: store.icons(for: deck, archetypes: archetypes), size: 52)
+                    PokemonIcons(names: store.icons(for: deck, archetypes: archetypes), size: compact ? 40 : 52)
                 }
                 .buttonStyle(.plain)
                 .help("Cambiar los iconos del mazo")
                 TextField("Nombre", text: Binding(get: { deck.name },
                                                   set: { name in store.update(deck.id) { $0.name = name } }))
                     .textFieldStyle(.plain)
-                    .font(.largeTitle.bold())
+                    .font(compact ? .title.bold() : .largeTitle.bold())
             }
+            ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 CountChip(text: parsed.totalCount == 1 ? "1 carta" : "\(parsed.totalCount) cartas",
                           symbol: parsed.isStandardSize ? "checkmark.seal.fill" : "exclamationmark.triangle.fill",
@@ -99,6 +136,8 @@ struct DeckView: View {
                     CountChip(text: "\(parsed.count(in: section)) \(section.title)", symbol: section.symbol, color: section.color)
                 }
             }
+            }
+            .scrollDisabled(!compact)
             HStack(spacing: 8) {
                 Menu {
                     Picker("Estado", selection: Binding(get: { deck.currentStatus },
@@ -134,7 +173,7 @@ struct DeckView: View {
                     Label("\(parsed.unparsedLines.count) líneas de la lista no se reconocieron. Revisar…",
                           systemImage: "exclamationmark.bubble")
                 }
-                .buttonStyle(.link)
+                .linkButtonStyle()
             }
         }
     }

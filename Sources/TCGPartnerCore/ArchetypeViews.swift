@@ -9,6 +9,7 @@ struct ArchetypeView: View {
     @EnvironmentObject private var journal: JournalStore
     let archetype: Archetype
     let actions: AppActions
+    @CompactWidth private var compact
 
     private var archetypeDecks: [Deck] { decks.decks(ofArchetype: archetype.id) }
 
@@ -28,39 +29,11 @@ struct ArchetypeView: View {
         let stats = archetypeMatches.stats
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                HStack(spacing: 16) {
-                    ArchetypeIcon(archetype: archetype, size: 64)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(archetype.name).font(.largeTitle.bold())
-                        Text("\(decks.folders(of: archetype.id).count) carpetas · \(archetypeDecks.count) mazos · \(stats.total) partidas")
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    let notes = journal.items.filter { $0.archetypeID == archetype.id }.count
-                    Button { actions.select(.journal(archetype.id, entry: nil)) } label: {
-                        Label(notes > 0 ? "Journal · \(notes)" : "Journal", systemImage: "book.closed")
-                    }
-                    .help("Tus anotaciones, guías y lo que aprendes en cada partida")
-                    Button("Editar…") { actions.editArchetype(archetype) }
-                    Menu {
-                        Button { actions.logMatchOfKind(mostPlayedDeck, .online) } label: {
-                            Label("Partida en PTCG Live…", systemImage: MatchKind.online.symbol)
-                        }
-                        Button { actions.logMatchOfKind(mostPlayedDeck, .inPerson) } label: {
-                            Label("Partida presencial…", systemImage: MatchKind.inPerson.symbol)
-                        }
-                    } label: {
-                        Label("Registrar partida", systemImage: "plus.circle")
-                    }
-                    .menuStyle(.button)
-                    .buttonStyle(.borderedProminent)
-                    .fixedSize()
-                    .disabled(archetypeDecks.isEmpty)
-                }
+                if compact { compactHeader(stats) } else { header(stats) }
 
                 PinnedJournalPanel(archetype: archetype, actions: actions)
 
-                HStack(alignment: .top, spacing: 20) {
+                AdaptiveStack(spacing: compact ? 16 : 20) {
                     Panel(title: "Récord del arquetipo") {
                         if stats.total == 0 {
                             Text("Sin partidas todavía.")
@@ -77,17 +50,32 @@ struct ArchetypeView: View {
                                 .padding([.horizontal, .bottom], 16)
                         }
                     }
-                    .frame(width: 300)
+                    .frame(width: compact ? nil : 300)
 
                     Panel(title: "Mazos", subtitle: "Ordenados por partidas jugadas") {
                         if archetypeDecks.isEmpty {
-                            Text("Arrastra mazos o carpetas sobre «\(archetype.name)» en la barra lateral.")
-                                .foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity)
-                                .padding(.bottom, 20)
+                            VStack(spacing: 10) {
+                                Text(compact ? "Todavía no hay mazos en este arquetipo."
+                                     : "Crea un mazo aquí o arrastra mazos y carpetas sobre «\(archetype.name)» en la barra lateral.")
+                                    .foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.center)
+                                Button("Crear mazo…") { actions.newDeckAt(.archetype(archetype.id)) }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.bottom, 20)
                         } else {
                             VStack(spacing: 0) {
                                 ForEach(analytics.deckPerformance.filter { archetypeDecks.map(\.id).contains($0.deck.id) }) { row in
+                                    if compact {
+                                        CompactStatRow(title: row.deck.name,
+                                                       detail: "\(gamesDetail(row.stats)) · \(row.deck.folder ?? "Sin carpeta")",
+                                                       rate: row.stats.winRate) {
+                                            PokemonIcons(names: decks.icons(for: row.deck, archetypes: archetypes), size: 30)
+                                        }
+                                        .padding(.horizontal, -16)
+                                        .onTapGesture { actions.select(.deck(row.deck.id)) }
+                                        Divider()
+                                    } else {
                                     HStack(spacing: 10) {
                                         PokemonIcons(names: decks.icons(for: row.deck, archetypes: archetypes), size: 30)
                                         VStack(alignment: .leading, spacing: 2) {
@@ -95,15 +83,19 @@ struct ArchetypeView: View {
                                             Text(row.deck.folder.map { "Carpeta «\($0)»" } ?? "Sin carpeta")
                                                 .font(.caption).foregroundStyle(.secondary)
                                         }
+                                        .lineLimit(1)
                                         Spacer()
-                                        Text(row.stats.total > 0 ? row.stats.record : "—").monospacedDigit()
+                                        if !compact {
+                                            Text(row.stats.total > 0 ? row.stats.record : "—").monospacedDigit()
+                                        }
                                         WinRateBar(rate: row.stats.winRate)
-                                        StatusBadge(status: row.deck.currentStatus)
+                                        if !compact { StatusBadge(status: row.deck.currentStatus) }
                                     }
                                     .padding(.vertical, 8)
                                     .contentShape(Rectangle())
                                     .onTapGesture { actions.select(.deck(row.deck.id)) }
                                     Divider()
+                                    }
                                 }
                             }
                             .padding(.horizontal, 16)
@@ -121,9 +113,9 @@ struct ArchetypeView: View {
 
                 let recent = archetypeMatches.sorted { $0.date > $1.date }.prefix(6)
                 if !recent.isEmpty {
-                    Panel(title: "Partidas recientes", subtitle: "Haz clic en una partida para ver todos sus datos") {
+                    Panel(title: "Partidas recientes", subtitle: "\(compact ? "Toca" : "Haz clic en") una partida para ver todos sus datos") {
                         Button("Historial completo") { actions.select(.matches) }
-                            .buttonStyle(.link)
+                            .linkButtonStyle()
                     } content: {
                         MatchList(matches: Array(recent), onSelect: { actions.showMatch($0.id) })
                     }
@@ -137,26 +129,143 @@ struct ArchetypeView: View {
                     }
                 }
             }
-            .padding(28)
+            .padding(compact ? 16 : 28)
             .frame(maxWidth: 1100)
             .frame(maxWidth: .infinity)
         }
         .background(AppBackground())
         .navigationTitle(archetype.name)
+        .toolbar {
+            if compact {
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Button { actions.newDeckAt(.archetype(archetype.id)) } label: {
+                            Label("Nuevo mazo", systemImage: "rectangle.stack.badge.plus")
+                        }
+                        Button { actions.editArchetype(archetype) } label: {
+                            Label("Editar arquetipo", systemImage: "pencil")
+                        }
+                    } label: {
+                        Label("Más", systemImage: "ellipsis")
+                    }
+                }
+            }
+        }
+    }
+
+    private var noteCount: Int {
+        journal.items.filter { $0.archetypeID == archetype.id }.count
+    }
+
+    private var summary: String {
+        "\(decks.folders(of: archetype.id).count) carpetas · \(archetypeDecks.count) mazos · \(archetypeMatches.count) partidas"
+    }
+
+    private var journalButton: some View {
+        Button { actions.select(.journal(archetype.id, entry: nil)) } label: {
+            OneLineLabel(title: noteCount > 0 ? "Journal · \(noteCount)" : "Journal", systemImage: "book.closed")
+        }
+        .help("Tus anotaciones, guías y lo que aprendes en cada partida")
+    }
+
+    private var registerMenu: some View {
+        Menu {
+            Button { actions.logMatchOfKind(mostPlayedDeck, .online) } label: {
+                Label("Partida en PTCG Live…", systemImage: MatchKind.online.symbol)
+            }
+            Button { actions.logMatchOfKind(mostPlayedDeck, .inPerson) } label: {
+                Label("Partida presencial…", systemImage: MatchKind.inPerson.symbol)
+            }
+        } label: {
+            OneLineLabel(title: "Registrar partida", short: "Partida", systemImage: "plus.circle")
+                .frame(maxWidth: compact ? .infinity : nil)
+        }
+        .menuStyle(.button)
+        .buttonStyle(.borderedProminent)
+        .disabled(archetypeDecks.isEmpty)
+    }
+
+    private func header(_ stats: MatchStats) -> some View {
+        HStack(spacing: 16) {
+            ArchetypeIcon(archetype: archetype, size: 64)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(archetype.name).font(.largeTitle.bold())
+                Text(summary).foregroundStyle(.secondary)
+            }
+            Spacer()
+            journalButton
+            Button("Editar…") { actions.editArchetype(archetype) }
+            Button { actions.newDeckAt(.archetype(archetype.id)) } label: {
+                Label("Nuevo mazo", systemImage: "rectangle.stack.badge.plus")
+            }
+            .help("Crea un mazo en este arquetipo, directo o dentro de una de sus carpetas")
+            registerMenu.fixedSize()
+        }
+    }
+
+    /// iPhone: el nombre ya está en la barra; aquí el icono, el resumen y las dos acciones principales.
+    private func compactHeader(_ stats: MatchStats) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                ArchetypeIcon(archetype: archetype, size: 44)
+                Text(summary).foregroundStyle(.secondary)
+            }
+            HStack {
+                registerMenu
+                journalButton.buttonStyle(.bordered)
+            }
+        }
     }
 }
 
 /// Tabla de matchups: récord y porcentaje de victoria contra cada mazo rival.
 struct MatchupTable: View {
     let matchups: [Matchup]
+    @CompactWidth private var compact
 
     var body: some View {
+        if compact { compactBody } else { fullBody }
+    }
+
+    /// iPhone: cada rival en dos líneas, con el récord debajo y el win rate a la derecha.
+    private var compactBody: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(matchups.enumerated()), id: \.element.opponent) { index, row in
+                if index > 0 { Divider().padding(.leading, 16) }
+                let stats = row.stats
+                HStack(spacing: 12) {
+                    if row.opponent.isEmpty {
+                        Image(systemName: "questionmark.circle")
+                            .font(.title3)
+                            .foregroundStyle(.tertiary)
+                            .frame(width: 44)
+                    } else {
+                        PokemonIcons(names: PokemonIcon.split(row.opponent), size: 26)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(row.opponent.isEmpty ? "Sin anotar" : row.opponent).fontWeight(.medium)
+                        Text("\(stats.total) \(stats.total == 1 ? "partida" : "partidas") · \(stats.wins)-\(stats.losses)-\(stats.ties)")
+                            .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                    }
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    MatchupBar(stats: stats, barWidth: 44).fixedSize()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(winRateColor(stats.winRate).opacity(0.06))
+            }
+        }
+        .padding(.bottom, 8)
+    }
+
+    private var fullBody: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Text("Mazo rival").frame(maxWidth: .infinity, alignment: .leading)
-                Text("Partidas").frame(width: 64, alignment: .trailing)
-                Text("V - D - E").frame(width: 80, alignment: .trailing)
-                Text("Win rate").frame(width: 190, alignment: .leading)
+                if !compact { Text("Partidas").frame(width: 64, alignment: .trailing) }
+                Text("V - D - E").frame(width: compact ? 54 : 80, alignment: .trailing)
+                Text("Win rate").frame(width: compact ? 104 : 190, alignment: .leading)
             }
             .font(.caption.weight(.semibold))
             .foregroundStyle(.secondary)
@@ -164,7 +273,7 @@ struct MatchupTable: View {
             .padding(.bottom, 8)
             ForEach(matchups, id: \.opponent) { row in
                 Divider()
-                MatchupRow(matchup: row)
+                MatchupRow(matchup: row, compact: compact)
             }
         }
         .padding(.bottom, 8)
@@ -173,6 +282,7 @@ struct MatchupTable: View {
 
 private struct MatchupRow: View {
     let matchup: Matchup
+    var compact = false
 
     private var stats: MatchStats { matchup.stats }
 
@@ -186,18 +296,20 @@ private struct MatchupRow: View {
                         .frame(width: 58, alignment: .leading)
                     Text("Sin anotar").foregroundStyle(.secondary)
                 } else {
-                    PokemonIcons(names: PokemonIcon.split(matchup.opponent), size: 30)
+                    PokemonIcons(names: PokemonIcon.split(matchup.opponent), size: compact ? 24 : 30)
                     Text(matchup.opponent).fontWeight(.medium)
                 }
             }
             .lineLimit(1)
             .frame(maxWidth: .infinity, alignment: .leading)
-            Text("\(stats.total)").monospacedDigit()
-                .frame(width: 64, alignment: .trailing)
+            if !compact {
+                Text("\(stats.total)").monospacedDigit()
+                    .frame(width: 64, alignment: .trailing)
+            }
             Text("\(stats.wins)-\(stats.losses)-\(stats.ties)").monospacedDigit()
-                .frame(width: 80, alignment: .trailing)
-            MatchupBar(stats: stats)
-                .frame(width: 190, alignment: .leading)
+                .frame(width: compact ? 54 : 80, alignment: .trailing)
+            MatchupBar(stats: stats, barWidth: compact ? 44 : 110)
+                .frame(width: compact ? 104 : 190, alignment: .leading)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
@@ -208,6 +320,7 @@ private struct MatchupRow: View {
 /// Barra dividida en victorias (verde), empates (gris) y derrotas (rojo), con el porcentaje.
 private struct MatchupBar: View {
     let stats: MatchStats
+    var barWidth: CGFloat = 110
 
     var body: some View {
         HStack(spacing: 10) {
@@ -220,7 +333,7 @@ private struct MatchupBar: View {
                 }
                 .clipShape(Capsule())
             }
-            .frame(width: 110, height: 7)
+            .frame(width: barWidth, height: 7)
             Text(percentText(stats.winRate))
                 .font(.callout.weight(.semibold))
                 .monospacedDigit()
@@ -240,10 +353,19 @@ struct ArchetypeEditor: View {
     @State private var confirmDelete = false
 
     var body: some View {
-        VStack(spacing: 0) {
+        EditorSheet(title: isNew ? "Nuevo arquetipo" : "Editar arquetipo",
+                    confirmLabel: isNew ? "Crear" : "Guardar",
+                    canConfirm: !archetype.name.trimmingCharacters(in: .whitespaces).isEmpty,
+                    onDelete: isNew ? nil : { confirmDelete = true },
+                    onConfirm: {
+                        archetype.name = archetype.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                        archetypes.save(archetype)
+                        dismiss()
+                    }) {
             Form {
                 Section {
                     TextField("Nombre", text: $archetype.name, prompt: Text("Ej. Alakazam"))
+                        .formLabel("Nombre")
                     // Círculos propios: el control segmentado pinta las imágenes de un solo color.
                     LabeledContent("Color") {
                         HStack(spacing: 8) {
@@ -280,24 +402,8 @@ struct ArchetypeEditor: View {
                 }
             }
             .formStyle(.grouped)
-            HStack {
-                if !isNew {
-                    Button("Eliminar", role: .destructive) { confirmDelete = true }
-                }
-                Spacer()
-                Button("Cancelar", role: .cancel) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Button(isNew ? "Crear" : "Guardar") {
-                    archetype.name = archetype.name.trimmingCharacters(in: .whitespacesAndNewlines)
-                    archetypes.save(archetype)
-                    dismiss()
-                }
-                .keyboardShortcut(.defaultAction)
-                .disabled(archetype.name.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            .padding(16)
         }
-        .frame(width: 520, height: 560)
+        .sheetFrame(width: 520, height: 560)
         .confirmationDialog("¿Eliminar el arquetipo «\(archetype.name)»?", isPresented: $confirmDelete) {
             Button("Eliminar arquetipo", role: .destructive) {
                 decks.detachArchetype(archetype.id)

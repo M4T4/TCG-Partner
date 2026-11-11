@@ -22,6 +22,11 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            #if os(iOS)
+            // En iPhone la pantalla es larga: el tema va primero para encontrarlo sin bajar.
+            themeSection
+            #endif
+
             Section {
                 PlayerFields(blankOption: "Ninguno")
             } header: {
@@ -61,26 +66,21 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section("Tema") {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 12)], spacing: 12) {
-                    ForEach(AppTheme.allCases) { option in
-                        ThemeSwatch(theme: option, isSelected: option == theme) { theme = option }
-                    }
-                }
-                .padding(.vertical, 6)
-                Picker("Apariencia", selection: $appearance) {
-                    ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
-            }
+            CloudSection()
+
+            #if os(macOS)
+            themeSection
+            #endif
 
             Section("Datos") {
                 LabeledContent("Mazos guardados", value: "\(decks.decks.count)")
                 LabeledContent("Jugadores guardados", value: "\(playerStore.players.count)")
                 HStack {
+                    #if os(macOS)
                     Button("Mostrar datos en Finder") {
-                        NSWorkspace.shared.open(DeckStore.supportFolder)
+                        PlatformFiles.reveal(DeckStore.supportFolder)
                     }
+                    #endif
                     Button(cacheCleared ? "Caché vaciada" : "Vaciar caché de imágenes") {
                         Task {
                             await CardImageService.shared.clearCache()
@@ -100,11 +100,91 @@ struct SettingsView: View {
         .navigationTitle("Configuración")
     }
 
+    private var themeSection: some View {
+        Section("Tema") {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 12)], spacing: 12) {
+                ForEach(AppTheme.allCases) { option in
+                    ThemeSwatch(theme: option, isSelected: option == theme) { theme = option }
+                }
+            }
+            .padding(.vertical, 6)
+            Picker("Apariencia", selection: $appearance) {
+                ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.segmented)
+        }
+    }
+
     private func addUsername() {
         let name = newUsername.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty, !usernames.contains(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) else { return }
         savedUsernames = (usernames + [name]).joined(separator: "\n")
         newUsername = ""
+    }
+}
+
+/// Iniciar sesión en la nube y ver el estado de la sincronización.
+private struct CloudSection: View {
+    @EnvironmentObject private var sync: SyncService
+    @State private var email = ""
+    @State private var password = ""
+    @State private var signingIn = false
+
+    var body: some View {
+        Section {
+            if let account = sync.email {
+                LabeledContent("Cuenta", value: account)
+                LabeledContent("Estado") {
+                    if sync.isSyncing {
+                        HStack(spacing: 6) {
+                            ProgressView().controlSize(.small)
+                            Text("Sincronizando…")
+                        }
+                    } else if let last = sync.lastSync {
+                        Text("Sincronizado \(last.formatted(.relative(presentation: .named)))")
+                    } else {
+                        Text("Aún no se sincroniza")
+                    }
+                }
+                HStack {
+                    Button("Sincronizar ahora") { sync.requestSync() }
+                        .disabled(sync.isSyncing)
+                    Spacer()
+                    Button("Cerrar sesión", role: .destructive) {
+                        Task { await sync.signOut() }
+                    }
+                }
+            } else {
+                TextField("Email", text: $email)
+                    .textContentType(.username)
+                SecureField("Contraseña", text: $password)
+                    .textContentType(.password)
+                    .onSubmit(signIn)
+                Button(signingIn ? "Iniciando sesión…" : "Iniciar sesión", action: signIn)
+                    .disabled(signingIn || email.isEmpty || password.isEmpty)
+            }
+            if let error = sync.errorMessage {
+                Label(error, systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                    .font(.callout)
+            }
+        } header: {
+            Text("Nube")
+        } footer: {
+            Text("Tus mazos, partidas, eventos, arquetipos, journal y jugadores se guardan también en tu cuenta, para verlos en tus otros equipos. Todo sigue funcionando sin conexión: los cambios se suben cuando vuelve.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func signIn() {
+        guard !email.isEmpty, !password.isEmpty, !signingIn else { return }
+        signingIn = true
+        Task {
+            await sync.signIn(email: email, password: password)
+            signingIn = false
+            if sync.email != nil { password = "" }
+        }
     }
 }
 

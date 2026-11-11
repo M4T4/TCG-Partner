@@ -1,6 +1,8 @@
-import AppKit
 import DeckKit
+#if os(macOS)
+import AppKit
 import PDFKit
+#endif
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -35,13 +37,7 @@ struct PrintDeckSheet: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            form
-                .frame(width: 330)
-            Divider()
-            preview
-        }
-        .frame(minWidth: 1000, idealWidth: 1080, minHeight: 700, idealHeight: 780)
+        layout
         .alert("Error", isPresented: Binding(get: { playerStore.errorMessage != nil },
                                              set: { if !$0 { playerStore.errorMessage = nil } })) {
             Button("Aceptar", role: .cancel) {}
@@ -50,11 +46,73 @@ struct PrintDeckSheet: View {
         }
     }
 
+    #if os(macOS)
+    /// Mac: formulario a la izquierda y vista previa grande a la derecha.
+    private var layout: some View {
+        HStack(spacing: 0) {
+            form
+                .frame(width: 330)
+            Divider()
+            preview
+        }
+        .sheetFrame(minWidth: 1000, idealWidth: 1080, minHeight: 700, idealHeight: 780)
+    }
+    #else
+    /// iPhone y iPad: la vista previa arriba, las opciones debajo y «Compartir» en la barra (desde ahí
+    /// se imprime, se guarda en Archivos o se envía).
+    private var layout: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    preview
+                        .frame(height: 440)
+                        .listRowInsets(EdgeInsets())
+                }
+                formSections
+            }
+            .navigationTitle("Hoja del mazo")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cerrar") { dismiss() }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    if let deck {
+                        ShareLink(item: DecklistPDFExport(name: "\(deck.name) - decklist.pdf", render: pdfData),
+                                  preview: SharePreview("\(deck.name) - decklist.pdf")) {
+                            Label("Compartir o imprimir PDF", systemImage: "square.and.arrow.up")
+                        }
+                    }
+                }
+            }
+        }
+    }
+    #endif
+
     // MARK: - Formulario
 
+    #if os(macOS)
     private var form: some View {
         VStack(spacing: 0) {
-            Form {
+            Form { formSections }
+                .formStyle(.grouped)
+
+            HStack {
+                Button("Cerrar") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Spacer()
+                Button("Exportar PDF…", action: exportPDF)
+                Button("Imprimir…", action: printPDF)
+                    .keyboardShortcut(.defaultAction)
+            }
+            .padding(14)
+            .disabled(deck == nil)
+        }
+    }
+    #endif
+
+    @ViewBuilder
+    private var formSections: some View {
                 Section("Jugador") {
                     PlayerFields(blankOption: "En blanco (rellenar a mano)")
                     Picker("Formato", selection: $format) {
@@ -82,7 +140,7 @@ struct PrintDeckSheet: View {
                             .tag(option)
                         }
                     }
-                    .pickerStyle(.radioGroup)
+                    .radioGroupPickerStyle()
                     .labelsHidden()
                 }
 
@@ -90,31 +148,17 @@ struct PrintDeckSheet: View {
                     Picker("Idioma de la hoja", selection: $language) {
                         ForEach(PrintLanguage.allCases) { Text($0.title).tag($0) }
                     }
-                    .pickerStyle(.segmented)
+                    .labeledSegmentedPickerStyle()
                     Picker("Papel", selection: $paper) {
                         ForEach(PaperSize.allCases) { Text($0.title).tag($0) }
                     }
-                    .pickerStyle(.segmented)
+                    .labeledSegmentedPickerStyle()
                     Picker("Tinta", selection: $color) {
                         Text("Color").tag(true)
                         Text("Blanco y negro").tag(false)
                     }
-                    .pickerStyle(.segmented)
+                    .labeledSegmentedPickerStyle()
                 }
-            }
-            .formStyle(.grouped)
-
-            HStack {
-                Button("Cerrar") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Spacer()
-                Button("Exportar PDF…", action: exportPDF)
-                Button("Imprimir…", action: printPDF)
-                    .keyboardShortcut(.defaultAction)
-            }
-            .padding(14)
-            .disabled(deck == nil)
-        }
     }
 
     private var notes: Binding<String> {
@@ -129,7 +173,7 @@ struct PrintDeckSheet: View {
             let page = paper.size
             let scale = min((proxy.size.width - 48) / page.width, (proxy.size.height - 48) / page.height)
             ZStack {
-                Color(nsColor: .underPageBackgroundColor)
+                Color.underPageBackground
                 if let deck {
                     DecklistPage(deck: deck, player: player, options: options)
                         .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
@@ -147,6 +191,7 @@ struct PrintDeckSheet: View {
         return DecklistPDF.render(DecklistPage(deck: deck, player: player, options: options), size: paper.size)
     }
 
+    #if os(macOS)
     private func exportPDF() {
         guard let deck, let data = pdfData() else { return }
         let panel = NSSavePanel()
@@ -156,7 +201,7 @@ struct PrintDeckSheet: View {
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             try data.write(to: url, options: .atomic)
-            NSWorkspace.shared.activateFileViewerSelecting([url])
+            PlatformFiles.reveal(url, selecting: true)
         } catch {
             store.errorMessage = "No se pudo guardar el PDF: \(error.localizedDescription)"
         }
@@ -177,6 +222,20 @@ struct PrintDeckSheet: View {
         }
         operation.jobTitle = deck?.name ?? "Decklist"
         operation.run()
+    }
+    #endif
+}
+
+/// El PDF de la hoja para el menú de compartir. Se dibuja solo cuando se comparte.
+struct DecklistPDFExport: Transferable {
+    let name: String
+    let render: @MainActor () -> Data?
+
+    static var transferRepresentation: some TransferRepresentation {
+        DataRepresentation(exportedContentType: .pdf) { export in
+            await MainActor.run { export.render() ?? Data() }
+        }
+        .suggestedFileName { $0.name }
     }
 }
 

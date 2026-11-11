@@ -1,4 +1,3 @@
-import AppKit
 import DeckKit
 import SwiftUI
 
@@ -61,13 +60,13 @@ actor PokemonIconService {
 struct PokemonIconView: View {
     let name: String
     var size: CGFloat = 24
-    @State private var image: NSImage?
+    @State private var image: PlatformImage?
     @State private var failed = false
 
     var body: some View {
         ZStack {
             if let image {
-                Image(nsImage: image)
+                Image(platformImage: image)
                     .resizable()
                     .interpolation(.none) // pixel art: sin suavizar
                     .aspectRatio(contentMode: .fit)
@@ -165,7 +164,7 @@ struct IconPicker: View {
                         names = []
                         load()
                     }
-                        .buttonStyle(.link)
+                        .linkButtonStyle()
                         .font(.caption)
                 }
             }
@@ -204,7 +203,10 @@ struct IconsEditorSheet: View {
     let onSave: ([String]) -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
+        EditorSheet(title: "Iconos", confirmLabel: "Guardar", onConfirm: {
+            onSave(names)
+            dismiss()
+        }) {
             Form {
                 Section {
                     IconPicker(names: $names, suggestions: suggestions, placeholder: inherited)
@@ -219,18 +221,7 @@ struct IconsEditorSheet: View {
                 }
             }
             .formStyle(.grouped)
-            HStack {
-                Spacer()
-                Button("Cancelar", role: .cancel) { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Guardar") {
-                    onSave(names)
-                    dismiss()
-                }
-                .keyboardShortcut(.defaultAction)
-            }
-            .padding(16)
         }
-        .frame(width: 520, height: 340)
+        .sheetFrame(width: 520, height: 340)
     }
 }

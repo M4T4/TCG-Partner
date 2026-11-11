@@ -11,6 +11,11 @@ enum SidebarItem: Hashable {
     case deck(UUID)
 }
 
+/// Pestañas del iPhone. En Mac y iPad se usa la barra lateral.
+enum AppTab: String, Hashable {
+    case dashboard, decks, matches, events, settings
+}
+
 /// Hojas que abre la ventana principal (una sola a la vez).
 enum ActiveSheet: Identifiable {
     case deckList(DeckEditorRequest)
@@ -60,6 +65,18 @@ struct ContentView: View {
     @State private var folderToDelete: String?
     @AppStorage("collapsedDeckFolders") private var collapsedFolders = ""
 
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var sizeClass
+    /// `-initialTab decks` al lanzar abre otra pestaña (para probar en el simulador).
+    @State private var tab = AppTab(rawValue: UserDefaults.standard.string(forKey: "initialTab") ?? "") ?? .dashboard
+    /// Pila de navegación de cada pestaña.
+    @State private var paths: [AppTab: [SidebarItem]] = [:]
+    /// En iPhone (ancho compacto) hay pestañas; en iPad, barra lateral como en Mac.
+    private var isCompact: Bool { sizeClass == .compact }
+    #else
+    private var isCompact: Bool { false }
+    #endif
+
     private var collapsed: Set<String> {
         Set(collapsedFolders.split(separator: "\n").map(String.init))
     }
@@ -84,8 +101,9 @@ struct ContentView: View {
 
     private var actions: AppActions {
         AppActions(
-            select: { selection = $0 },
+            select: { show($0) },
             newDeck: { sheet = .deckList(.fromClipboard(at: store.currentLocation)) },
+            newDeckAt: { sheet = .deckList(.fromClipboard(at: $0)) },
             logMatch: { deckID in
                 sheet = .match(MatchRecord(deckID: deckID ?? selectedDeckID, eventID: currentEventID), isNew: true)
             },
@@ -112,12 +130,17 @@ struct ContentView: View {
     }
 
     var body: some View {
-        NavigationSplitView {
-            sidebar
-        } detail: {
-            detail
+        Group {
+            #if os(iOS)
+            if isCompact { tabs } else { splitView }
+            #else
+            splitView
+            #endif
         }
         .sheet(item: $sheet, content: sheetContent)
+        #if DEBUG
+        .onAppear(perform: openDebugSheet)
+        #endif
         .onChange(of: selection) {
             if let id = selectedDeckID, store.selectedID != id { store.selectedID = id }
         }
@@ -131,7 +154,10 @@ struct ContentView: View {
             }
         }
         .onChange(of: store.decks.count) { old, new in
-            if new > old, let id = store.selectedID { selection = .deck(id) }
+            if new > old, let id = store.selectedID { show(.deck(id)) }
+            #if os(iOS)
+            if new < old { pruneMissingPages() }
+            #endif
         }
         .modifier(CommandReceivers(actions: actions, onPrint: {
             if let id = selectedDeckID { sheet = .print(id) }
@@ -163,6 +189,87 @@ struct ContentView: View {
         } message: {
             Text(errorMessage ?? "")
         }
+    }
+
+    #if DEBUG
+    /// `-openSheet matchDetail|matchEditor|newMatch|eventPage|eventEditor|archetypePage|archetypeEditor|deckPage` al lanzar, para revisar hojas en el simulador.
+    private func openDebugSheet() {
+        let latest = matches.items.max { $0.date < $1.date }
+        switch UserDefaults.standard.string(forKey: "openSheet") {
+        case "matchDetail": if let latest { sheet = .matchDetail(latest.id) }
+        case "matchEditor": if let latest { sheet = .match(latest, isNew: false) }
+        case "newMatch": actions.logMatch(nil)
+        case "newDeck":
+            if let archetype = archetypes.items.max(by: { store.folders(of: $0.id).count < store.folders(of: $1.id).count }) {
+                sheet = .deckList(.create(prefill: "", at: .archetype(archetype.id)))
+            }
+        case "journal":
+            if let archetype = archetypes.items.max(by: { a, b in
+                journal.items.filter { $0.archetypeID == a.id }.count < journal.items.filter { $0.archetypeID == b.id }.count
+            }) {
+                show(.journal(archetype.id, entry: nil))
+            }
+        case "journalEntry":
+            if let entry = journal.items.first { show(.journal(entry.archetypeID, entry: entry.id)) }
+        case "print":
+            if let deck = store.decks.first { sheet = .print(deck.id) }
+        case "editList":
+            if let deck = store.decks.first { sheet = .deckList(.edit(deck.id)) }
+        case "archetypePage":
+            if let archetype = archetypes.items.max(by: { store.decks(ofArchetype: $0.id).count < store.decks(ofArchetype: $1.id).count }) {
+                show(.archetype(archetype.id))
+            }
+        case "archetypeEditor":
+            if let archetype = archetypes.items.first { sheet = .archetype(archetype, isNew: false) }
+        case "deckPage":
+            if let deck = store.decks.max(by: { $0.modified < $1.modified }) { show(.deck(deck.id)) }
+        case "eventPage", "eventEditor":
+            // El evento con más partidas, para ver la página llena.
+            let event = events.items.max { a, b in
+                matches.items.filter { $0.eventID == a.id }.count < matches.items.filter { $0.eventID == b.id }.count
+            }
+            if let event {
+                if UserDefaults.standard.string(forKey: "openSheet") == "eventPage" {
+                    show(.event(event.id))
+                } else {
+                    sheet = .event(event, isNew: false)
+                }
+            }
+        default: break
+        }
+    }
+    #endif
+
+    private var splitView: some View {
+        NavigationSplitView {
+            sidebar
+        } detail: {
+            detail
+        }
+    }
+
+    /// Muestra una sección o página: en la barra lateral la selecciona; en iPhone cambia de pestaña
+    /// (secciones principales) o la abre encima de la pestaña actual.
+    private func show(_ item: SidebarItem) {
+        #if os(iOS)
+        if isCompact {
+            let root: AppTab? = switch item {
+            case .dashboard: .dashboard
+            case .matches: .matches
+            case .events: .events
+            case .settings: .settings
+            default: nil
+            }
+            if let root {
+                tab = root
+                paths[root] = []
+            } else if paths[tab]?.last != item {
+                paths[tab, default: []].append(item)
+            }
+            return
+        }
+        #endif
+        selection = item
     }
 
     @ViewBuilder
@@ -240,15 +347,38 @@ struct ContentView: View {
 
     // MARK: - Detalle
 
-    @ViewBuilder
     private var detail: some View {
-        switch selection {
+        page(selection ?? .dashboard)
+    }
+
+    private var matchesPage: some View {
+        MatchesView(actions: actions) { sheet = .match($0, isNew: false) }
+            .navigationTitle("Partidas")
+    }
+
+    private var eventsPage: some View {
+        EventsView(actions: actions)
+            .navigationTitle("Eventos")
+    }
+
+    /// Lo que se ve al ir a algo que ya no existe (p. ej. un mazo borrado en otro dispositivo).
+    @ViewBuilder
+    private func missing(_ fallback: some View) -> some View {
+        if isCompact {
+            ContentUnavailableView("Ya no existe", systemImage: "questionmark.folder",
+                                   description: Text("Se eliminó o se movió."))
+        } else {
+            fallback
+        }
+    }
+
+    @ViewBuilder
+    private func page(_ item: SidebarItem) -> some View {
+        switch item {
         case .matches:
-            MatchesView(actions: actions) { sheet = .match($0, isNew: false) }
-                .navigationTitle("Partidas")
+            matchesPage
         case .events:
-            EventsView(actions: actions)
-                .navigationTitle("Eventos")
+            eventsPage
         case .settings:
             SettingsView()
         case .event(let id):
@@ -256,30 +386,29 @@ struct ContentView: View {
                 EventPage(event: event, actions: actions)
                     .id(id)
             } else {
-                EventsView(actions: actions)
-                    .navigationTitle("Eventos")
+                missing(eventsPage)
             }
         case .archetype(let id):
             if let archetype = archetypes.item(id) {
                 ArchetypeView(archetype: archetype, actions: actions)
                     .id(id)
             } else {
-                dashboard
+                missing(dashboard)
             }
         case .journal(let id, let entry):
             if let archetype = archetypes.item(id) {
                 JournalView(archetype: archetype, initialEntry: entry, actions: actions)
                     .id(id)
             } else {
-                dashboard
+                missing(dashboard)
             }
         case .deck(let id):
             if let deck = store.deck(id) {
                 deckDetail(deck)
             } else {
-                dashboard
+                missing(dashboard)
             }
-        case .dashboard, nil:
+        case .dashboard:
             dashboard
         }
     }
@@ -290,7 +419,7 @@ struct ContentView: View {
                  onEditIcons: { sheet = .icons(.deck(deck.id)) })
             .id(deck.id)
             .navigationTitle(deck.name)
-            .navigationSubtitle(deck.parsed.summary)
+            .windowSubtitle(deck.parsed.summary)
     }
 
     private var dashboard: some View {
@@ -310,7 +439,7 @@ struct ContentView: View {
             archetypesSection
             decksSection
         }
-        .onDeleteCommand {
+        .onDeleteKey {
             if let id = selectedDeckID { store.delete(id) }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -375,15 +504,16 @@ struct ContentView: View {
             ForEach(folders, id: \.self) { folderGroup($0) }
             rows(looseDecks)
             if folders.isEmpty && looseDecks.isEmpty {
-                Text("Arrastra carpetas o mazos aquí")
+                Text(isCompact ? "Sin mazos" : "Arrastra carpetas o mazos aquí")
                     .font(.callout)
                     .foregroundStyle(.tertiary)
             }
         } label: {
-            ArchetypeLabel(archetype: archetype, count: store.decks(ofArchetype: archetype.id).count) { payloads in
-                dropOnArchetype(payloads, archetype.id)
+            link(.archetype(archetype.id)) {
+                ArchetypeLabel(archetype: archetype, count: store.decks(ofArchetype: archetype.id).count) { payloads in
+                    dropOnArchetype(payloads, archetype.id)
+                }
             }
-            .tag(SidebarItem.archetype(archetype.id))
             .contextMenu { archetypeMenu(archetype) }
         }
     }
@@ -401,7 +531,7 @@ struct ContentView: View {
         let decks = store.decks(in: folder)
         return DisclosureGroup(isExpanded: isExpanded(folder)) {
             if decks.isEmpty {
-                Text("Vacía · arrastra mazos aquí")
+                Text(isCompact ? "Vacía" : "Vacía · arrastra mazos aquí")
                     .font(.callout)
                     .foregroundStyle(.tertiary)
             }
@@ -417,8 +547,9 @@ struct ContentView: View {
 
     private func rows(_ decks: [Deck]) -> some View {
         ForEach(decks) { deck in
-            DeckRow(deck: deck, icons: store.icons(for: deck, archetypes: archetypes))
-                .tag(SidebarItem.deck(deck.id))
+            link(.deck(deck.id)) {
+                DeckRow(deck: deck, icons: store.icons(for: deck, archetypes: archetypes))
+            }
                 .draggable(deck.id.uuidString)
                 .dropDestination(for: String.self) { ids, _ in
                     // Soltar un mazo sobre otro lo lleva al mismo sitio.
@@ -446,7 +577,9 @@ struct ContentView: View {
             }
         }
         Button("Duplicar") { store.duplicate(deck.id) }
+        #if os(macOS)
         Button("Mostrar en Finder") { store.revealInFinder(deck.id) }
+        #endif
         Divider()
         Button("Mover a la papelera", role: .destructive) { store.delete(deck.id) }
     }
@@ -491,6 +624,16 @@ struct ContentView: View {
         }
         Divider()
         Button("Eliminar carpeta…", role: .destructive) { folderToDelete = folder }
+    }
+
+    /// Fila que lleva a una página: en la barra lateral se selecciona; en iPhone es un enlace.
+    @ViewBuilder
+    private func link(_ item: SidebarItem, @ViewBuilder label: () -> some View) -> some View {
+        if isCompact {
+            NavigationLink(value: item, label: label)
+        } else {
+            label().tag(item)
+        }
     }
 
     // MARK: - Acciones
@@ -723,3 +866,76 @@ extension Notification.Name {
     static let newArchetypeRequested = Notification.Name("TCGPartner.newArchetypeRequested")
     static let settingsRequested = Notification.Name("TCGPartner.settingsRequested")
 }
+
+// MARK: - iPhone: pestañas
+
+#if os(iOS)
+extension ContentView {
+    var tabs: some View {
+        TabView(selection: $tab) {
+            stack(.dashboard) { dashboard }
+                .tabItem { Label("Dashboard", systemImage: "square.grid.2x2") }
+                .tag(AppTab.dashboard)
+            stack(.decks) { decksTab }
+                .tabItem { Label("Mazos", systemImage: "rectangle.stack") }
+                .tag(AppTab.decks)
+            stack(.matches) { matchesPage }
+                .tabItem { Label("Partidas", systemImage: "list.bullet.rectangle") }
+                .tag(AppTab.matches)
+            stack(.events) { eventsPage }
+                .tabItem { Label("Eventos", systemImage: "calendar") }
+                .badge(events.items.filter { $0.isUpcoming() }.count)
+                .tag(AppTab.events)
+            stack(.settings) { SettingsView() }
+                .tabItem { Label("Ajustes", systemImage: "gearshape") }
+                .tag(AppTab.settings)
+        }
+        .onChange(of: paths) { syncSelectedDeck() }
+        .onChange(of: tab) { syncSelectedDeck() }
+    }
+
+    private func stack(_ tab: AppTab, @ViewBuilder root: () -> some View) -> some View {
+        NavigationStack(path: Binding(get: { paths[tab] ?? [] }, set: { paths[tab] = $0 })) {
+            root().navigationDestination(for: SidebarItem.self) { page($0) }
+        }
+    }
+
+    /// Arquetipos, carpetas y mazos (lo que en Mac está en la barra lateral).
+    private var decksTab: some View {
+        List {
+            archetypesSection
+            decksSection
+        }
+        .navigationTitle("Mazos")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button { actions.newDeck() } label: { Label("Nuevo mazo (pegar lista)", systemImage: "doc.on.clipboard") }
+                    Button { actions.editArchetype(nil) } label: { Label("Nuevo arquetipo", systemImage: "square.stack.3d.up") }
+                    Button { askForFolderName(.create(moving: nil, archetype: nil)) } label: {
+                        Label("Nueva carpeta", systemImage: "folder.badge.plus")
+                    }
+                } label: {
+                    Label("Nuevo", systemImage: "plus")
+                }
+            }
+        }
+    }
+
+    /// El mazo que está a la vista es el seleccionado (lo usan «Registrar partida», imprimir, etc.).
+    private func syncSelectedDeck() {
+        if case .deck(let id) = paths[tab]?.last, store.selectedID != id { store.selectedID = id }
+    }
+
+    /// Cierra las páginas de mazos que ya no existen.
+    func pruneMissingPages() {
+        for (key, path) in paths {
+            let kept = path.filter { item in
+                if case .deck(let id) = item { return store.deck(id) != nil }
+                return true
+            }
+            if kept.count != path.count { paths[key] = kept }
+        }
+    }
+}
+#endif
