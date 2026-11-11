@@ -458,3 +458,118 @@ func gamesDetail(_ stats: MatchStats) -> String {
     guard stats.total > 0 else { return "Sin partidas" }
     return "\(stats.total) \(stats.total == 1 ? "partida" : "partidas") · \(stats.record)"
 }
+
+// MARK: - Banner de posición
+
+/// Estilo del banner según la posición. Aquí se ajusta qué color lleva cada lugar.
+enum PlacementTier {
+    case gold, silver, bronze, topEight, other
+
+    init(_ placement: Placement) {
+        switch placement.place {
+        case 1: self = .gold
+        case 2: self = .silver
+        case 3: self = .bronze
+        case 4...8: self = .topEight
+        default: self = .other
+        }
+    }
+
+    /// Degradado del banner, del color claro al oscuro. `accent` es el color del tema de la app.
+    func colors(accent: Color) -> [Color] {
+        switch self {
+        case .gold: [Color(hex: 0xF5D06F), Color(hex: 0xC9A227)]
+        case .silver: [Color(hex: 0xE8E8E8), Color(hex: 0xA8A8A8)]
+        case .bronze: [Color(hex: 0xE0A070), Color(hex: 0xA0623A)]
+        case .topEight: [accent.opacity(0.85), accent]
+        case .other: [Color(hex: 0x8E8E93), Color(hex: 0x636366)]
+        }
+    }
+
+    /// Texto oscuro sobre los metálicos claros; blanco sobre los colores oscuros.
+    var textColor: Color {
+        switch self {
+        case .gold, .silver: Color(hex: 0x2B2410)
+        case .bronze: Color(hex: 0x2A160A)
+        case .topEight, .other: .white
+        }
+    }
+
+    /// Brillo diagonal para que el oro y la plata se vean metálicos.
+    var shine: Double {
+        switch self {
+        case .gold, .silver: 0.55
+        case .bronze: 0.35
+        case .topEight, .other: 0.15
+        }
+    }
+}
+
+/// Triángulo de la esquina superior derecha: los catetos son el borde de arriba y el de la derecha.
+struct CornerTriangle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// Banner triangular con la posición («2.º» / «de 15») girado 45° en la esquina de una tarjeta.
+/// Se coloca como overlay de la tarjeta; el que lo usa lo recorta con el radio de la tarjeta.
+struct PlacementBanner: View {
+    /// Largo de cada cateto del triángulo.
+    static let size: CGFloat = 70
+
+    let placement: Placement
+    @AppStorage(AppTheme.key) private var theme = AppTheme.system
+
+    var body: some View {
+        let tier = PlacementTier(placement)
+        let size = Self.size
+        // Centro del texto: sobre la perpendicular a la diagonal, un poco más cerca de la esquina
+        // que de la hipotenusa, para que las dos líneas quepan dentro del triángulo.
+        let toCorner = size / 2 * 0.4
+        ZStack(alignment: .topLeading) {
+            CornerTriangle()
+                .fill(LinearGradient(colors: tier.colors(accent: theme.accent ?? AppTheme.psychic.accent!),
+                                     startPoint: .topTrailing, endPoint: .bottomLeading))
+                .overlay(
+                    CornerTriangle().fill(LinearGradient(
+                        stops: [.init(color: .white.opacity(0), location: 0.25),
+                                .init(color: .white.opacity(tier.shine), location: 0.5),
+                                .init(color: .white.opacity(0), location: 0.72)],
+                        startPoint: .topLeading, endPoint: .bottomTrailing))
+                )
+                .shadow(color: .black.opacity(0.18), radius: 2, x: -1, y: 1)
+            VStack(spacing: -1) {
+                Text(placement.ordinal)
+                    .font(.system(size: 17, weight: .heavy))
+                if let players = placement.players {
+                    Text("de \(players)")
+                        .font(.system(size: 9, weight: .semibold))
+                }
+            }
+            .monospacedDigit()
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            .foregroundStyle(tier.textColor)
+            .frame(width: size * 0.62)
+            .rotationEffect(.degrees(45))
+            .position(x: size / 2 + toCorner, y: size / 2 - toCorner)
+        }
+        .frame(width: size, height: size)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(placement.text)
+    }
+}
+
+extension Color {
+    /// Color sRGB a partir de un hexadecimal, como 0xF5D06F.
+    init(hex: UInt32) {
+        self.init(red: Double(hex >> 16 & 0xFF) / 255, green: Double(hex >> 8 & 0xFF) / 255,
+                  blue: Double(hex & 0xFF) / 255)
+    }
+}

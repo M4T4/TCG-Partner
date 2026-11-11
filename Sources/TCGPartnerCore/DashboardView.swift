@@ -725,6 +725,19 @@ private struct EventResultRow: View {
 struct EventSummary: View {
     let event: TournamentEvent
     let deckName: String?
+    /// Muestra la posición como banner en la esquina (vista de Eventos), si el evento la tiene.
+    var showsPlacementBanner = false
+    /// Reserva las líneas vacías (lugar, costo y mazo) para que todas las tarjetas midan lo mismo.
+    var fixedHeight = false
+
+    private static let cornerRadius: CGFloat = 10
+
+    private var banner: Placement? { showsPlacementBanner ? event.finish : nil }
+
+    /// «INSCRITO» solo importa antes del evento; en los pasados ya no se muestra.
+    private var showsRegistered: Bool { event.registered && event.isUpcoming() }
+    /// El botón «ABRIR» sale si no estás inscrito y el evento tiene enlace.
+    private var showsLink: Bool { !event.registered && event.url != nil }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -736,22 +749,32 @@ struct EventSummary: View {
                     Text(event.kind.title).font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                if event.registered {
+                if showsRegistered {
                     Badge(text: "INSCRITO", color: .green)
-                } else if let url = event.url {
+                        // Con banner, el chip se recorre a la izquierda del triángulo.
+                        .padding(.trailing, banner == nil ? 0 : PlacementBanner.size * 0.62)
+                } else if showsLink, let url = event.url {
                     Link(destination: url) {
                         Text("ABRIR").font(.caption.weight(.bold))
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.small)
+                    .padding(.trailing, banner == nil ? 0 : PlacementBanner.size * 0.62)
                 }
             }
             Group {
                 Label(dateText, systemImage: "clock")
-                if !event.location.isEmpty { Label(event.location, systemImage: "mappin.and.ellipse") }
+                if !event.location.isEmpty {
+                    Label(event.location, systemImage: "mappin.and.ellipse")
+                } else if fixedHeight {
+                    Label(" ", systemImage: "mappin.and.ellipse").hidden()
+                }
                 HStack(spacing: 12) {
                     if let cost = event.costText { Label(cost, systemImage: "dollarsign.circle") }
                     if let deckName { Label(deckName, systemImage: "rectangle.stack") }
+                    if fixedHeight && event.costText == nil && deckName == nil {
+                        Label(" ", systemImage: "rectangle.stack").hidden()
+                    }
                 }
             }
             .font(.caption)
@@ -759,8 +782,17 @@ struct EventSummary: View {
             .lineLimit(1)
         }
         .padding(12)
+        // Sin chip a la derecha, el título no debe meterse bajo el banner.
+        .padding(.trailing, banner != nil && !showsRegistered && !showsLink ? PlacementBanner.size * 0.45 : 0)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 10).stroke(.separator.opacity(0.7)))
+        .overlay(alignment: .topTrailing) {
+            if let banner {
+                PlacementBanner(placement: banner)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius))
+            }
+        }
+        .background(RoundedRectangle(cornerRadius: Self.cornerRadius).stroke(.separator.opacity(0.7)))
     }
 
     private var dateText: String {

@@ -64,20 +64,16 @@ struct EventsView: View {
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
                     ForEach(items) { event in
                         VStack(alignment: .leading, spacing: 0) {
-                            EventSummary(event: event, deckName: event.plannedDeckID.flatMap(decks.deck)?.name)
+                            EventSummary(event: event, deckName: event.plannedDeckID.flatMap(decks.deck)?.name,
+                                         showsPlacementBanner: true, fixedHeight: true)
+                            // La línea de resultado ocupa su lugar aunque no haya partidas,
+                            // para que las tarjetas de una misma fila queden alineadas.
                             let record = matches.items.filter { $0.eventID == event.id }.stats
-                            if record.total > 0 || event.finish != nil {
-                                HStack(spacing: 8) {
-                                    if let finish = event.finish { PlacementBadge(placement: finish) }
-                                    if record.total > 0 {
-                                        Text("Resultado: \(record.record) · \(percentText(record.winRate))")
-                                            .font(.caption.weight(.semibold))
-                                            .foregroundStyle(winRateColor(record.winRate))
-                                    }
-                                }
+                            Text(record.total > 0 ? "Resultado: \(record.record) · \(percentText(record.winRate))" : " ")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(winRateColor(record.winRate))
                                 .padding(.top, 6)
                                 .padding(.leading, 4)
-                            }
                         }
                         .contentShape(Rectangle())
                         .onTapGesture { actions.select(.event(event.id)) }
@@ -108,6 +104,15 @@ struct NumberField: View {
     @Binding var value: Int?
     var prompt = ""
     var range: ClosedRange<Int> = 1...9999
+    @FocusState private var focused: Bool
+
+    /// Ajusta el número al rango. Solo al salir del campo o pulsar Enter: si se hiciera en cada tecla,
+    /// el «1» de «15» se convertiría en el mínimo antes de poder escribir el «5».
+    private func clamp() {
+        if let current = value, !range.contains(current) {
+            value = min(max(current, range.lowerBound), range.upperBound)
+        }
+    }
 
     private var stepperValue: Binding<Int> {
         Binding(get: { value ?? range.lowerBound - 1 },
@@ -122,11 +127,9 @@ struct NumberField: View {
                 .textFieldStyle(.roundedBorder)
                 .monospacedDigit()
                 .frame(width: 80)
-                .onChange(of: value) {
-                    if let current = value, !range.contains(current) {
-                        value = min(max(current, range.lowerBound), range.upperBound)
-                    }
-                }
+                .focused($focused)
+                .onSubmit(clamp)
+                .onChange(of: focused) { if !focused { clamp() } }
             Stepper("", value: stepperValue, in: (range.lowerBound - 1)...range.upperBound)
                 .labelsHidden()
         }
@@ -252,6 +255,8 @@ struct EventEditor: View {
         // Posiciones o jugadores en 0 o negativos no cuentan.
         if (event.placement ?? 1) < 1 { event.placement = nil }
         if (event.players ?? 1) < 1 { event.players = nil }
+        // Por si se guardó sin salir del campo: no puede haber menos jugadores que tu posición.
+        if let players = event.players, let place = event.placement, players < place { event.players = place }
         events.save(event)
         dismiss()
     }
